@@ -1,0 +1,72 @@
+package com.caestro.server.domain.auth.controller.api;
+
+import com.caestro.server.domain.auth.dto.request.RefreshRequest;
+import com.caestro.server.domain.auth.dto.response.TokenResponse;
+import com.caestro.server.domain.user.entity.User;
+import com.caestro.server.global.security.CustomUserDetails;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.enums.ParameterIn;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.RequestBody;
+import jakarta.validation.Valid;
+
+@Tag(name = "Auth", description = "인증 API")
+public interface AuthApi {
+
+    @Operation(
+            summary = "소셜 로그인 콜백",
+            description = "provider(kakao 등)에서 받은 인가코드로 JWT 토큰을 발급합니다."
+    )
+    @Parameter(name = "provider", description = "소셜 로그인 provider (예: kakao)", in = ParameterIn.PATH, required = true)
+    @Parameter(name = "code", description = "인가코드", in = ParameterIn.QUERY, required = true)
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "토큰 발급 성공",
+                    content = @Content(schema = @Schema(implementation = TokenResponse.class))),
+            @ApiResponse(responseCode = "400", description = "인가코드가 없음"),
+            @ApiResponse(responseCode = "502", description = "외부 인증 서버 오류")
+    })
+    ResponseEntity<TokenResponse> socialCallback(String provider, String code);
+
+    @Operation(
+            summary = "액세스토큰 재발급",
+            description = "리프레시토큰으로 만료된 액세스토큰을 재발급합니다. (토큰 rotation)"
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "재발급 성공",
+                    content = @Content(schema = @Schema(implementation = TokenResponse.class))),
+            @ApiResponse(responseCode = "400", description = "리프레시토큰이 없음"),
+            @ApiResponse(responseCode = "401", description = "유효하지 않은 토큰")
+    })
+    ResponseEntity<TokenResponse> refresh(@Valid @RequestBody RefreshRequest request);
+
+    @Operation(
+            summary = "로그아웃",
+            description = "Redis에서 리프레시토큰을 삭제합니다. 이후 재발급이 불가능합니다."
+    )
+    @SecurityRequirement(name = "BearerAuth")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "로그아웃 완료"),
+            @ApiResponse(responseCode = "401", description = "토큰이 없음")
+    })
+    ResponseEntity<?> logout(CustomUserDetails userDetails);
+
+    @Operation(
+            summary = "내 정보 조회",
+            description = "액세스토큰으로 로그인한 유저 정보를 조회합니다."
+    )
+    @SecurityRequirement(name = "BearerAuth")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "조회 성공",
+                    content = @Content(schema = @Schema(implementation = User.class))),
+            @ApiResponse(responseCode = "401", description = "토큰이 없음"),
+            @ApiResponse(responseCode = "404", description = "유저를 찾을 수 없음")
+    })
+    ResponseEntity<User> getMe(CustomUserDetails userDetails);
+}

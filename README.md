@@ -32,6 +32,9 @@ Caestro는 두 대의 스마트폰을 실시간으로 연결해, 사진에 찍�
 
 ### 2. 빌드 및 실행
 ```bash
+# 도커 실행
+docker compose up -d
+
 # 권한 부여 (필요 시)
 chmod +x gradlew
 

@@ -29,6 +29,7 @@ public class AuthService {
     @Value("${jwt.refresh-expiration}")
     private long refreshExpiration;
 
+
     public TokenResponse socialLogin(String providerName, String code) {
         OAuthProvider provider = oAuthProviderRegistry.getProvider(providerName);
         OAuthProfile profile = provider.getProfile(code);

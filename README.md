@@ -8,7 +8,7 @@ Caestro는 두 대의 스마트폰을 실시간으로 연결해, 사진에 찍�
 이 저장소는 Caestro 서비스의 **비즈니스 로직 처리, 사용자 인증(OAuth2), 그리고 WebRTC 통신을 위한 시그널링(Signaling) 역할**을 담당하는 Spring Boot 기반의 서버 코드를 포함하고 있습니다.
 
 ## ✨ 주요 기능
-- **소셜 로그인 및 인증**: 카카오(Kakao) OAuth2 로그인 및 JWT 기반 토큰(Access/Refresh) 인증 처리
+- **소셜 로그인 및 인증**: 카카오(Kakao), 구글(Google) OAuth2 로그인 및 JWT 기반 토큰(Access/Refresh) 인증 처리
 - **사용자 관리**: 프로필 조회 및 세션(로그아웃 등) 관리 (Redis 활용)
 - **시그널링 서버 (개발 예정)**: 두 기기 간의 P2P(WebRTC) 연결을 위한 세션 생성 및 Offer/Answer, ICE Candidate 교환
 - **사진 및 메타데이터 관리 (개발 예정)**: 촬영된 듀얼샷 이미지의 클라우드 보관 및 DB 관리

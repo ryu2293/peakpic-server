@@ -7,7 +7,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record SignalingRequest(
         String type,
-        String sessionId,
+        String sessionCode,
         String sender,
         String sdpType,
         String sdp,

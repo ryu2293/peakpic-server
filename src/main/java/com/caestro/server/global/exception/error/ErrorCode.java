@@ -17,6 +17,7 @@ public enum ErrorCode {
     USER_NOT_FOUND(404, "유저를 찾을 수 없습니다"),
     SESSION_NOT_FOUND(404, "세션을 찾을 수 없습니다"),
     SESSION_ALREADY_CONNECTED(409, "이미 다른 촬영자가 연결된 세션입니다"),
+    SESSION_ACCESS_DENIED(403, "해당 세션에 접근할 권한이 없습니다"),
     INVALID_SIGNALING_MESSAGE(400, "유효하지 않은 시그널링 메시지입니다"),
     INTERNAL_SERVER_ERROR(500, "서버 오류가 발생했습니다");
 

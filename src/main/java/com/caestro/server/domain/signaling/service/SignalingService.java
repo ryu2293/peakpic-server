@@ -1,5 +1,6 @@
 package com.caestro.server.domain.signaling.service;
 
+import com.caestro.server.domain.session.service.SessionService;
 import com.caestro.server.domain.signaling.dto.request.SignalingRequest;
 import com.caestro.server.domain.signaling.dto.response.SignalingResponse;
 import com.caestro.server.domain.signaling.entity.SessionInfo;
@@ -25,6 +26,7 @@ public class SignalingService {
     private final RedisTemplate<String, String> redisTemplate;
     private final WebSocketSessionManager sessionManager;
     private final ObjectMapper objectMapper;
+    private final SessionService sessionService;
 
     /**
      * 디렉터(찍히는 사람)가 새로운 WebRTC 세션(방)을 생성합니다.
@@ -38,22 +40,26 @@ public class SignalingService {
         String sessionCode = UUID.randomUUID().toString().substring(0, 8);
 
         // 2. 세션 정보 생성 및 디렉터 정보 세팅 (핸드셰이크 시 인증된 userId 포함)
-        Long directorUserId = (Long) socket.getAttributes().get("userId");
+        Long directorUserId = getUserId(socket);
+        LocalDateTime expiresAt = LocalDateTime.now().plusMinutes(10);
         SessionInfo info = new SessionInfo();
         info.setSessionCode(sessionCode);
         info.setDirectorUserId(directorUserId);
         info.setDirectorSocketId(socket.getId());
         info.setStatus("WAITING");
-        info.setExpiresAt(LocalDateTime.now().plusMinutes(10));
+        info.setExpiresAt(expiresAt);
 
         // 3. Redis에 세션 정보 및 소켓-세션 매핑 저장
         saveSessionInfo(sessionCode, info);
         redisTemplate.opsForValue().set("socket:" + socket.getId(), sessionCode, 10, TimeUnit.MINUTES);
 
-        // 4. 디렉터에게 세션 생성 완료 응답 전송
+        // 4. DB에 세션 영구 저장 (Redis는 실시간 상태, DB는 영구 기록 용도)
+        sessionService.createSession(sessionCode, directorUserId, expiresAt);
+
+        // 5. 디렉터에게 세션 생성 완료 응답 전송
         SignalingResponse response = SignalingResponse.builder()
                 .type("SESSION_CREATED")
-                .sessionId(sessionCode)
+                .sessionCode(sessionCode)
                 .build();
 
         sessionManager.sendMessage(socket.getId(), response);
@@ -65,18 +71,18 @@ public class SignalingService {
      * 방이 존재하면 상태를 연결됨(CONNECTED)으로 변경하고, 디렉터에게 카메라맨이 입장했음을 알립니다.
      *
      * @param socket 카메라맨의 웹소켓 세션 객체
-     * @param msg    입장할 세션 코드(sessionId)가 담긴 요청 메시지
+     * @param msg    입장할 세션 코드(sessionCode)가 담긴 요청 메시지
      */
     public void joinSession(WebSocketSession socket, SignalingRequest msg) {
         // 1. 세션 코드로 방 정보 조회
-        String sessionCode = msg.sessionId();
+        String sessionCode = msg.sessionCode();
         SessionInfo info = getSessionInfo(sessionCode);
 
         // 2. 존재하지 않는 세션이면 에러 응답
         if (info == null) {
             SignalingResponse errorResponse = SignalingResponse.builder()
                     .type("ERROR")
-                    .sessionId(sessionCode)
+                    .sessionCode(sessionCode)
                     .message(ErrorCode.SESSION_NOT_FOUND.getMessage())
                     .build();
             sessionManager.sendMessage(socket.getId(), errorResponse);
@@ -87,7 +93,7 @@ public class SignalingService {
         if ("CONNECTED".equals(info.getStatus())) {
             SignalingResponse errorResponse = SignalingResponse.builder()
                     .type("ERROR")
-                    .sessionId(sessionCode)
+                    .sessionCode(sessionCode)
                     .message(ErrorCode.SESSION_ALREADY_CONNECTED.getMessage())
                     .build();
             sessionManager.sendMessage(socket.getId(), errorResponse);
@@ -95,7 +101,7 @@ public class SignalingService {
         }
 
         // 4. 카메라맨 정보 세팅 및 세션 상태를 연결됨으로 변경 (핸드셰이크 시 인증된 userId 포함)
-        Long cameraUserId = (Long) socket.getAttributes().get("userId");
+        Long cameraUserId = getUserId(socket);
         info.setCameraUserId(cameraUserId);
         info.setCameraSocketId(socket.getId());
         info.setStatus("CONNECTED");
@@ -106,10 +112,13 @@ public class SignalingService {
         // 디렉터 소켓의 TTL도 함께 갱신
         redisTemplate.expire("socket:" + info.getDirectorSocketId(), 10, TimeUnit.MINUTES);
 
-        // 6. 디렉터에게 카메라맨 입장 알림
+        // 6. DB 세션 상태를 연결됨으로 동기화 (현재 카메라 모드는 APP 고정, 라이트 모드는 추후 구현)
+        sessionService.joinSession(sessionCode, cameraUserId, "APP");
+
+        // 7. 디렉터에게 카메라맨 입장 알림
         SignalingResponse notifyDirector = SignalingResponse.builder()
                 .type("PEER_JOINED")
-                .sessionId(sessionCode)
+                .sessionCode(sessionCode)
                 .build();
         sessionManager.sendMessage(info.getDirectorSocketId(), notifyDirector);
 
@@ -167,13 +176,16 @@ public class SignalingService {
 
             SignalingResponse disconnectMsg = SignalingResponse.builder()
                     .type("PEER_DISCONNECTED")
-                    .sessionId(sessionCode)
+                    .sessionCode(sessionCode)
                     .build();
 
             sessionManager.sendMessage(targetSocketId, disconnectMsg);
 
             info.setStatus("ENDED");
             saveSessionInfo(sessionCode, info);
+
+            // DB 세션도 종료 상태로 동기화
+            sessionService.endSession(sessionCode);
             log.info("Session ended due to disconnect: {}", sessionCode);
         }
 
@@ -190,25 +202,28 @@ public class SignalingService {
      */
     public void endSession(WebSocketSession socket, SignalingRequest msg) {
         // 1. 세션 코드로 방 정보 조회
-        String sessionCode = msg.sessionId();
+        String sessionCode = msg.sessionCode();
         SessionInfo info = getSessionInfo(sessionCode);
         if (info != null) {
             // 2. 세션 상태를 종료로 변경
             info.setStatus("ENDED");
             saveSessionInfo(sessionCode, info);
 
-            // 3. 상대방에게 세션 종료 알림 전송
+            // 3. DB 세션도 종료 상태로 동기화
+            sessionService.endSession(sessionCode);
+
+            // 4. 상대방에게 세션 종료 알림 전송
             String targetSocketId = socket.getId().equals(info.getDirectorSocketId())
                     ? info.getCameraSocketId()
                     : info.getDirectorSocketId();
 
             SignalingResponse endMsg = SignalingResponse.builder()
                     .type("SESSION_ENDED")
-                    .sessionId(sessionCode)
+                    .sessionCode(sessionCode)
                     .build();
             sessionManager.sendMessage(targetSocketId, endMsg);
         }
-        // 4. 소켓의 세션 매핑 정보 삭제
+        // 5. 소켓의 세션 매핑 정보 삭제
         redisTemplate.delete("socket:" + socket.getId());
         log.info("Session ended: {}", sessionCode);
     }
@@ -247,5 +262,15 @@ public class SignalingService {
         } catch (JsonProcessingException e) {
             log.error("Failed to serialize SessionInfo", e);
         }
+    }
+
+    /**
+     * 웹소켓 핸드셰이크 시 소켓 attributes에 저장된 인증 유저 ID를 추출합니다.
+     *
+     * @param socket 유저 ID를 추출할 웹소켓 세션
+     * @return 인증된 유저 ID (없으면 null)
+     */
+    private Long getUserId(WebSocketSession socket) {
+        return (Long) socket.getAttributes().get("userId");
     }
 }

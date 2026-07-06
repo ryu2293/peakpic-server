@@ -7,7 +7,7 @@ import lombok.Builder;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record SignalingResponse(
         String type,
-        String sessionId,
+        String sessionCode,
         String sender,
         String sdpType,
         String sdp,

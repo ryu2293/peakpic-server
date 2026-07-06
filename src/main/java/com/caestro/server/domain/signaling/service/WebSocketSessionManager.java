@@ -1,0 +1,53 @@
+package com.caestro.server.domain.signaling.service;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Component;
+import org.springframework.web.socket.TextMessage;
+import org.springframework.web.socket.WebSocketSession;
+import org.springframework.web.socket.handler.ConcurrentWebSocketSessionDecorator;
+
+import java.io.IOException;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
+@Slf4j
+@Component
+@RequiredArgsConstructor
+public class WebSocketSessionManager {
+
+    private static final int SEND_TIME_LIMIT = 10 * 1000; // 10초
+    private static final int SEND_BUFFER_SIZE_LIMIT = 512 * 1024; // 512KB
+
+    private final ObjectMapper objectMapper;
+    private final Map<String, WebSocketSession> socketMap = new ConcurrentHashMap<>();
+
+    public void addSession(WebSocketSession session) {
+        WebSocketSession concurrentSession = new ConcurrentWebSocketSessionDecorator(
+                session, SEND_TIME_LIMIT, SEND_BUFFER_SIZE_LIMIT
+        );
+        socketMap.put(session.getId(), concurrentSession);
+        log.info("WebSocket Session Add: {}", session.getId());
+    }
+
+    public void removeSession(WebSocketSession session) {
+        socketMap.remove(session.getId());
+        log.info("WebSocket Session Remove: {}", session.getId());
+    }
+
+    public void sendMessage(String socketId, Object payload) {
+        if (socketId == null) return;
+        
+        WebSocketSession target = socketMap.get(socketId);
+        if (target != null && target.isOpen()) {
+            try {
+                target.sendMessage(new TextMessage(objectMapper.writeValueAsString(payload)));
+            } catch (IOException e) {
+                log.error("Failed to send message to session {}", socketId, e);
+            }
+        } else {
+            log.warn("Target session {} not found or closed", socketId);
+        }
+    }
+}

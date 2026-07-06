@@ -84,4 +84,19 @@ public class Session {
         this.status = "ENDED";
         this.endedAt = LocalDateTime.now();
     }
+
+    /**
+     * 주어진 유저가 이 세션의 참여자(디렉터 또는 촬영자)인지 확인한다.
+     *
+     * @param userId 확인할 유저 ID
+     * @return 디렉터 또는 촬영자와 일치하면 true, 아니면 false
+     */
+    public boolean isParticipant(Long userId) {
+        if (userId == null) {
+            return false;
+        }
+        boolean isDirector = director != null && userId.equals(director.getId());
+        boolean isCamera = camera != null && userId.equals(camera.getId());
+        return isDirector || isCamera;
+    }
 }

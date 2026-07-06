@@ -100,4 +100,33 @@ public class SessionService {
         return sessionRepository.findById(sessionId)
                 .orElseThrow(() -> new CustomException(ErrorCode.SESSION_NOT_FOUND));
     }
+
+    /**
+     * 소유권 검증을 포함한 세션 단건 조회.
+     * 요청자가 세션의 참여자(디렉터/촬영자)이거나 관리자(ADMIN)인 경우에만 세션을 반환한다.
+     *
+     * @param sessionId     조회할 세션의 PK
+     * @param requesterId   조회를 요청한 유저 ID
+     * @param requesterRole 조회를 요청한 유저의 권한
+     * @return 조회된 Session 엔티티
+     * @throws CustomException SESSION_NOT_FOUND - 세션을 찾을 수 없음
+     * @throws CustomException SESSION_ACCESS_DENIED - 세션 참여자도 관리자도 아님
+     */
+    @Transactional(readOnly = true)
+    public Session getOwnedSession(Long sessionId, Long requesterId, User.Role requesterRole) {
+        // 1. 세션 조회 (없으면 예외)
+        Session session = getSession(sessionId);
+
+        // 2. 관리자는 운영/디버깅 목적으로 모든 세션 접근 허용
+        if (requesterRole == User.Role.ADMIN) {
+            return session;
+        }
+
+        // 3. 세션 참여자(디렉터 또는 촬영자)가 아니면 접근 거부
+        if (!session.isParticipant(requesterId)) {
+            throw new CustomException(ErrorCode.SESSION_ACCESS_DENIED);
+        }
+
+        return session;
+    }
 }

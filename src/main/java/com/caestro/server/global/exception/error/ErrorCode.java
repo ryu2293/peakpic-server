@@ -15,6 +15,9 @@ public enum ErrorCode {
     MISSING_AUTH_CODE(400, "인가코드가 없습니다"),
     INVALID_REFRESH_TOKEN(401, "유효하지 않은 리프레시 토큰입니다"),
     USER_NOT_FOUND(404, "유저를 찾을 수 없습니다"),
+    SESSION_NOT_FOUND(404, "세션을 찾을 수 없습니다"),
+    SESSION_ALREADY_CONNECTED(409, "이미 다른 촬영자가 연결된 세션입니다"),
+    INVALID_SIGNALING_MESSAGE(400, "유효하지 않은 시그널링 메시지입니다"),
     INTERNAL_SERVER_ERROR(500, "서버 오류가 발생했습니다");
 
     private final int status;

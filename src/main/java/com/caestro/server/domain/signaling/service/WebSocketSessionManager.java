@@ -6,6 +6,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
+import org.springframework.web.socket.handler.ConcurrentWebSocketSessionDecorator;
 
 import java.io.IOException;
 import java.util.Map;
@@ -16,11 +17,17 @@ import java.util.concurrent.ConcurrentHashMap;
 @RequiredArgsConstructor
 public class WebSocketSessionManager {
 
+    private static final int SEND_TIME_LIMIT = 10 * 1000; // 10초
+    private static final int SEND_BUFFER_SIZE_LIMIT = 512 * 1024; // 512KB
+
     private final ObjectMapper objectMapper;
     private final Map<String, WebSocketSession> socketMap = new ConcurrentHashMap<>();
 
     public void addSession(WebSocketSession session) {
-        socketMap.put(session.getId(), session);
+        WebSocketSession concurrentSession = new ConcurrentWebSocketSessionDecorator(
+                session, SEND_TIME_LIMIT, SEND_BUFFER_SIZE_LIMIT
+        );
+        socketMap.put(session.getId(), concurrentSession);
         log.info("WebSocket Session Add: {}", session.getId());
     }
 

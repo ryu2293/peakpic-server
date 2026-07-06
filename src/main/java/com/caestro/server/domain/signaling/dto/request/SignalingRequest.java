@@ -1,5 +1,7 @@
 package com.caestro.server.domain.signaling.dto.request;
 
+import com.caestro.server.global.exception.CustomException;
+import com.caestro.server.global.exception.error.ErrorCode;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -13,4 +15,10 @@ public record SignalingRequest(
         Integer sdpMLineIndex,
         String candidate
 ) {
+    public SignalingRequest {
+        // 수동 검증: type이 없는 메시지는 처리할 수 없으므로 즉시 거부
+        if (type == null || type.isBlank()) {
+            throw new CustomException(ErrorCode.INVALID_SIGNALING_MESSAGE);
+        }
+    }
 }

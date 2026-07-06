@@ -209,7 +209,10 @@ public class SignalingService {
             info.setStatus("ENDED");
             saveSessionInfo(sessionCode, info);
 
-            // 3. 상대방에게 세션 종료 알림 전송
+            // 3. DB 세션도 종료 상태로 동기화
+            sessionService.endSession(sessionCode);
+
+            // 4. 상대방에게 세션 종료 알림 전송
             String targetSocketId = socket.getId().equals(info.getDirectorSocketId())
                     ? info.getCameraSocketId()
                     : info.getDirectorSocketId();
@@ -220,7 +223,7 @@ public class SignalingService {
                     .build();
             sessionManager.sendMessage(targetSocketId, endMsg);
         }
-        // 4. 소켓의 세션 매핑 정보 삭제
+        // 5. 소켓의 세션 매핑 정보 삭제
         redisTemplate.delete("socket:" + socket.getId());
         log.info("Session ended: {}", sessionCode);
     }

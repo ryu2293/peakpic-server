@@ -25,11 +25,12 @@ public class SessionService {
      * @param sessionCode    발급된 세션 코드
      * @param directorUserId 세션을 생성한 디렉터의 유저 ID
      * @param expiresAt      세션 만료 시각
+     * @param liteToken      라이트 모드(비로그인 촬영자) 참여 토큰
      * @return 저장된 Session 엔티티
      * @throws CustomException USER_NOT_FOUND - 디렉터 유저를 찾을 수 없음
      */
     @Transactional
-    public Session createSession(String sessionCode, Long directorUserId, LocalDateTime expiresAt) {
+    public Session createSession(String sessionCode, Long directorUserId, LocalDateTime expiresAt, String liteToken) {
         // 1. 디렉터 유저 조회 (없으면 예외)
         User director = userRepository.findById(directorUserId)
                 .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
@@ -40,6 +41,7 @@ public class SessionService {
                 .director(director)
                 .cameraMode("APP")
                 .status("WAITING")
+                .liteToken(liteToken)
                 .expiresAt(expiresAt)
                 .build();
 

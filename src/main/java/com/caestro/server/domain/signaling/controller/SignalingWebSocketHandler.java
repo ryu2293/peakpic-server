@@ -33,7 +33,7 @@ public class SignalingWebSocketHandler extends TextWebSocketHandler {
     protected void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {
         try {
             SignalingRequest msg = objectMapper.readValue(message.getPayload(), SignalingRequest.class);
-            log.debug("Received message: type={}, sessionCode={}", msg.type(), msg.sessionCode());
+            log.info("Received message: type={}, sessionCode={}", msg.type(), msg.sessionCode());
 
             switch (msg.type()) {
                 case "CREATE_SESSION" -> signalingService.createSession(session, msg);

@@ -3,22 +3,18 @@ package com.caestro.server.domain.devicespec.dto.response;
 import com.caestro.server.domain.devicespec.entity.DeviceSpec;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
 
-@Getter
-@AllArgsConstructor
-public class DeviceSpecResponse {
-
-    private Long id;
-    private Long sessionId;
-    private String role;
-    private BigDecimal maxZoom;
-    private BigDecimal minZoom;
-    private BigDecimal screenRatio;
-    private String maxResolution;
-    private String osType;
-    private LocalDateTime createdAt;
+public record DeviceSpecResponse(
+        Long id,
+        Long sessionId,
+        String role,
+        BigDecimal maxZoom,
+        BigDecimal minZoom,
+        BigDecimal screenRatio,
+        String maxResolution,
+        String osType,
+        LocalDateTime createdAt
+) {
 
     /**
      * DeviceSpec 엔티티를 클라이언트 응답용 DTO로 변환한다.

@@ -37,16 +37,28 @@ Caestro는 두 대의 스마트폰을 실시간으로 연결해 찍히는 사람
 ### DTO
 - Request DTO : 이름은 {동사}{명사}Request.java
 - Response DTO : 이름은 {명사}Response.java
-- Lombok: @Getter, @NoArgsConstructor 기본 적용
-- 유효성 검증: @NotBlank, @NotNull 등 Bean Validation 어노테이션 사용
+- 모든 DTO는 record로 생성한다 (Lombok 클래스 대신 record 사용)
+- 유효성 검증: @NotBlank, @NotNull 등 Bean Validation 어노테이션을 record 컴포넌트에 적용
+- Response DTO는 엔티티 → DTO 변환용 정적 팩토리 메서드 from()을 제공한다
 
 ```java
-@Getter
-@NoArgsConstructor
-public class RefreshRequest {
+// Request DTO
+public record RefreshRequest(
 
     @NotBlank(message = "리프레시토큰은 필수입니다")
-    private String refreshToken;
+    String refreshToken
+) {
+}
+
+// Response DTO - 정적 팩토리 메서드 from() 으로 엔티티를 변환한다
+public record SessionResponse(
+    Long id,
+    String sessionCode,
+    String status
+) {
+    public static SessionResponse from(Session session) {
+        return new SessionResponse(session.getId(), session.getSessionCode(), session.getStatus());
+    }
 }
 ```
 

@@ -1,5 +1,6 @@
 package com.caestro.server.domain.signaling.service;
 
+import com.caestro.server.domain.devicespec.service.DeviceSpecService;
 import com.caestro.server.domain.session.service.SessionService;
 import com.caestro.server.domain.signaling.dto.request.SignalingRequest;
 import com.caestro.server.domain.signaling.dto.response.SignalingResponse;
@@ -27,6 +28,7 @@ public class SignalingService {
     private final WebSocketSessionManager sessionManager;
     private final ObjectMapper objectMapper;
     private final SessionService sessionService;
+    private final DeviceSpecService deviceSpecService;
 
     /**
      * 디렉터(찍히는 사람)가 새로운 WebRTC 세션(방)을 생성합니다.
@@ -123,6 +125,34 @@ public class SignalingService {
         sessionManager.sendMessage(info.getDirectorSocketId(), notifyDirector);
 
         log.info("Peer joined session: {}", sessionCode);
+    }
+
+    /**
+     * DEVICE_SPEC 메시지를 처리합니다.
+     * 기기 카메라 스펙을 device_specs 테이블에 저장(Insert-only)한 뒤, 기존 정책대로 상대 기기에 relay합니다.
+     * 연결 안정성을 우선하기 위해 DB 저장 로직은 try-catch로 격리하며, 저장 성공/실패와 무관하게 relay는 항상 수행됩니다.
+     *
+     * @param socket 기기 스펙을 보낸 클라이언트의 웹소켓 세션
+     * @param msg    기기 스펙(role, 줌 배율, 해상도 등)이 담긴 DEVICE_SPEC 메시지
+     */
+    public void handleDeviceSpec(WebSocketSession socket, SignalingRequest msg) {
+        // 1. 기기 스펙 DB 저장 (실패해도 relay를 막지 않도록 예외를 격리)
+        try {
+            deviceSpecService.saveDeviceSpec(
+                    msg.sessionCode(),
+                    msg.role(),
+                    msg.maxZoom(),
+                    msg.minZoom(),
+                    msg.screenRatio(),
+                    msg.maxResolution(),
+                    msg.osType()
+            );
+        } catch (Exception e) {
+            log.error("Failed to save device spec: sessionCode={}", msg.sessionCode(), e);
+        }
+
+        // 2. 기존 정책대로 상대 기기에 스펙 중계
+        relay(socket, msg);
     }
 
     /**

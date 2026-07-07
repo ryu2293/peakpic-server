@@ -50,6 +50,9 @@ public class Session {
     @Column(nullable = false, length = 20)
     private String status;
 
+    @Column(length = 100)
+    private String liteToken;
+
     @Column(nullable = false)
     private LocalDateTime expiresAt;
 

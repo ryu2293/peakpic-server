@@ -36,6 +36,18 @@ public class WebSocketSessionManager {
         log.info("WebSocket Session Remove: {}", session.getId());
     }
 
+    /**
+     * 해당 소켓이 현재 연결되어 살아있는지(open) 확인한다.
+     *
+     * @param socketId 확인할 소켓 ID
+     * @return 세션이 존재하고 열려 있으면 true
+     */
+    public boolean isConnected(String socketId) {
+        if (socketId == null) return false;
+        WebSocketSession session = socketMap.get(socketId);
+        return session != null && session.isOpen();
+    }
+
     public void sendMessage(String socketId, Object payload) {
         if (socketId == null) return;
         

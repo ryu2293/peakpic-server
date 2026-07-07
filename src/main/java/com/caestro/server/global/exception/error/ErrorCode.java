@@ -26,6 +26,8 @@ public enum ErrorCode {
     INVALID_SORT_PARAMETER(400, "유효하지 않은 정렬 조건입니다"),
     INVALID_SHOT_DIMENSION(400, "해상도(width, height)는 둘 다 있거나 둘 다 없어야 합니다"),
     INVALID_SHOT_LOCATION(400, "위치 정보(latitude, longitude)는 둘 다 있거나 둘 다 없어야 합니다"),
+    LITE_TOKEN_INVALID(401, "유효하지 않은 라이트 모드 참여 토큰입니다"),
+    LITE_CONCURRENT_CONNECTION(409, "이미 활성화된 연결이 있는 토큰입니다"),
     INVALID_SIGNALING_MESSAGE(400, "유효하지 않은 시그널링 메시지입니다"),
     INTERNAL_SERVER_ERROR(500, "서버 오류가 발생했습니다");
 

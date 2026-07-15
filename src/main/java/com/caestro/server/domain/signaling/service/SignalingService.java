@@ -30,6 +30,7 @@ public class SignalingService {
     private final SessionService sessionService;
     private final DeviceSpecService deviceSpecService;
     private final LiteTokenService liteTokenService;
+    private final SignalingDiagnosticLogger diagnosticLogger;
 
     /**
      * 디렉터(찍히는 사람)가 새로운 WebRTC 세션(방)을 생성합니다.
@@ -188,8 +189,13 @@ public class SignalingService {
         // 라이트 모드 토큰도 세션과 함께 슬라이딩 갱신
         liteTokenService.refresh(info.getLiteToken());
 
-        // 4. 보낸 사람의 반대편 소켓으로 메시지 중계
-        String targetSocketId = socket.getId().equals(info.getDirectorSocketId())
+        // 4. SDP/ICE 진단 로깅 — 방향을 판별해 candidate 타입/SDP 요약을 구조화 로깅
+        boolean fromDirector = socket.getId().equals(info.getDirectorSocketId());
+        String direction = fromDirector ? "director->camera" : "camera->director";
+        diagnosticLogger.logRelayed(msg, sessionCode, direction);
+
+        // 5. 보낸 사람의 반대편 소켓으로 메시지 중계
+        String targetSocketId = fromDirector
                 ? info.getCameraSocketId()
                 : info.getDirectorSocketId();
 

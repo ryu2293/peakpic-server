@@ -50,7 +50,7 @@ public class WebSocketSessionManager {
 
     public void sendMessage(String socketId, Object payload) {
         if (socketId == null) return;
-        
+
         WebSocketSession target = socketMap.get(socketId);
         if (target != null && target.isOpen()) {
             try {
@@ -60,6 +60,29 @@ public class WebSocketSessionManager {
             }
         } else {
             log.warn("Target session {} not found or closed", socketId);
+        }
+    }
+
+    /**
+     * 이미 직렬화된 JSON 문자열을 소켓에 그대로 전달한다.
+     * Redis Pub/Sub으로 넘어온 메시지는 발행 측에서 이미 JSON으로 직렬화되어 있으므로,
+     * 재직렬화 없이 원문을 그대로 write한다.
+     *
+     * @param socketId 대상 소켓 ID
+     * @param json     클라이언트에게 보낼 JSON 문자열
+     */
+    public void sendRawMessage(String socketId, String json) {
+        if (socketId == null) return;
+
+        WebSocketSession target = socketMap.get(socketId);
+        if (target != null && target.isOpen()) {
+            try {
+                target.sendMessage(new TextMessage(json));
+            } catch (IOException e) {
+                log.error("Failed to send raw message to session {}", socketId, e);
+            }
+        } else {
+            log.warn("Target session {} not found or closed (raw)", socketId);
         }
     }
 }

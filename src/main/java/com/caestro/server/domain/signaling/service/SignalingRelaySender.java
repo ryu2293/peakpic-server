@@ -46,7 +46,7 @@ public class SignalingRelaySender {
             String payloadJson = objectMapper.writeValueAsString(payload);
             String envelope = objectMapper.writeValueAsString(new SignalingRelayMessage(socketId, payloadJson));
             redisTemplate.convertAndSend(CHANNEL, envelope);
-            log.info("[PUBSUB] published (socket not local): socketId={}", socketId);
+            log.debug("[PUBSUB] published (socket not local): socketId={}", socketId);
         } catch (JsonProcessingException e) {
             // 발행 실패가 시그널링 흐름을 막지 않도록 예외를 격리
             log.error("Failed to publish relay message: socketId={}", socketId, e);

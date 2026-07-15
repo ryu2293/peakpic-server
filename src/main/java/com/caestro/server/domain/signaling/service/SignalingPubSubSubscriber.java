@@ -36,7 +36,7 @@ public class SignalingPubSubSubscriber implements MessageListener {
 
             // 대상 소켓이 이 인스턴스에 있을 때만 전달 (아니면 다른 인스턴스가 처리하므로 무시)
             boolean localDeliver = sessionManager.isConnected(relay.socketId());
-            log.info("[PUBSUB] received: socketId={}, localDeliver={}", relay.socketId(), localDeliver);
+            log.debug("[PUBSUB] received: socketId={}, localDeliver={}", relay.socketId(), localDeliver);
             if (localDeliver) {
                 sessionManager.sendRawMessage(relay.socketId(), relay.payload());
             }

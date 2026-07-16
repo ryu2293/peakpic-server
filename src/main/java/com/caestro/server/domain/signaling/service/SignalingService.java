@@ -31,6 +31,7 @@ public class SignalingService {
     private final DeviceSpecService deviceSpecService;
     private final LiteTokenService liteTokenService;
     private final SignalingDiagnosticLogger diagnosticLogger;
+    private final SignalingRelaySender relaySender;
 
     /**
      * 디렉터(찍히는 사람)가 새로운 WebRTC 세션(방)을 생성합니다.
@@ -131,7 +132,7 @@ public class SignalingService {
                 .type("PEER_JOINED")
                 .sessionCode(sessionCode)
                 .build();
-        sessionManager.sendMessage(info.getDirectorSocketId(), notifyDirector);
+        relaySender.send(info.getDirectorSocketId(), notifyDirector);
 
         log.info("Peer joined session: {}", sessionCode);
     }
@@ -194,12 +195,12 @@ public class SignalingService {
         String direction = fromDirector ? "director->camera" : "camera->director";
         diagnosticLogger.logRelayed(msg, sessionCode, direction);
 
-        // 5. 보낸 사람의 반대편 소켓으로 메시지 중계
+        // 5. 보낸 사람의 반대편 소켓으로 메시지 중계 (다른 인스턴스면 Redis 발행으로 자동 처리)
         String targetSocketId = fromDirector
                 ? info.getCameraSocketId()
                 : info.getDirectorSocketId();
 
-        sessionManager.sendMessage(targetSocketId, msg);
+        relaySender.send(targetSocketId, msg);
     }
 
     /**
@@ -225,7 +226,7 @@ public class SignalingService {
                     .sessionCode(sessionCode)
                     .build();
 
-            sessionManager.sendMessage(targetSocketId, disconnectMsg);
+            relaySender.send(targetSocketId, disconnectMsg);
 
             // 라이트 모드 촬영자가 이탈한 경우: 세션을 종료하지 않고 재연결 대기 상태로 되돌림
             // (토큰은 유효하게 유지 → 같은 토큰으로 재접속 가능, F-CON-06 자동 재연결 대응)
@@ -281,7 +282,7 @@ public class SignalingService {
                     .type("SESSION_ENDED")
                     .sessionCode(sessionCode)
                     .build();
-            sessionManager.sendMessage(targetSocketId, endMsg);
+            relaySender.send(targetSocketId, endMsg);
         }
         // 5. 소켓의 세션 매핑 정보 삭제
         redisTemplate.delete("socket:" + socket.getId());

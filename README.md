@@ -25,12 +25,17 @@ Caestro는 두 대의 스마트폰을 실시간으로 연결해, 사진에 찍�
 
 ### 1. 환경 변수 설정
 로컬에서 실행하기 위해서는 보안상 GitHub에서 제외된 `application-dev.yml` 파일을 `src/main/resources/` 경로에 직접 생성해야 합니다.
+
 <br>**J-J-YA 노션의 환경변수파일에서 application-dev.yml 확인**
+
 
 
 
 ### 2. 빌드 및 실행
 ```bash
+# 도커 실행
+docker compose up -d
+
 # 권한 부여 (필요 시)
 chmod +x gradlew
 

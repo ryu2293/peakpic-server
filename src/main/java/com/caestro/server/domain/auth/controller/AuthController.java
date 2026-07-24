@@ -2,6 +2,7 @@ package com.caestro.server.domain.auth.controller;
 
 import com.caestro.server.domain.auth.controller.api.AuthApi;
 import com.caestro.server.domain.auth.dto.request.RefreshRequest;
+import com.caestro.server.domain.auth.dto.request.SocialTokenLoginRequest;
 import com.caestro.server.domain.auth.dto.response.TokenResponse;
 import com.caestro.server.domain.auth.service.AuthService;
 import com.caestro.server.domain.user.entity.User;
@@ -41,6 +42,14 @@ public class AuthController implements AuthApi {
             throw new CustomException(ErrorCode.MISSING_AUTH_CODE);
         }
         return ResponseEntity.ok(authService.socialLogin(provider, code));
+    }
+
+    @PostMapping("/{provider}/token")
+    @Override
+    public ResponseEntity<TokenResponse> socialLoginByToken(
+            @PathVariable String provider,
+            @Valid @RequestBody SocialTokenLoginRequest request) {
+        return ResponseEntity.ok(authService.socialLoginByToken(provider, request.accessToken()));
     }
 
     @PostMapping("/refresh")

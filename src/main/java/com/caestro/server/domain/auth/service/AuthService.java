@@ -37,6 +37,28 @@ public class AuthService {
         return generateTokens(user);
     }
 
+    /**
+     * 모바일(네이티브 SDK) 소셜 로그인.
+     * SDK가 발급받은 access token으로 프로필을 조회해 JWT를 발급한다. (Android·iOS 공통)
+     *
+     * @param providerName OAuth provider 이름 (kakao, google)
+     * @param accessToken  소셜 플랫폼 access token (모바일 SDK 발급)
+     * @return accessToken + refreshToken 쌍
+     */
+    public TokenResponse socialLoginByToken(String providerName, String accessToken) {
+        // 1. provider 조회
+        OAuthProvider provider = oAuthProviderRegistry.getProvider(providerName);
+
+        // 2. access token으로 소셜 프로필 조회 (code 교환 생략)
+        OAuthProfile profile = provider.getProfileByToken(accessToken);
+
+        // 3. 유저 조회 또는 생성 (최초 로그인 시 회원가입)
+        User user = findOrCreateUser(profile, providerName);
+
+        // 4. JWT 발급
+        return generateTokens(user);
+    }
+
     private User findOrCreateUser(OAuthProfile profile, String provider) {
         return userRepository.findByOauthProviderAndOauthId(provider, profile.oauthId())
                 .orElseGet(() -> userRepository.save(User.builder()

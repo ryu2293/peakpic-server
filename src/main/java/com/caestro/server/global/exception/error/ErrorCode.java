@@ -27,6 +27,7 @@ public enum ErrorCode {
     INVALID_SHOT_DIMENSION(400, "해상도(width, height)는 둘 다 있거나 둘 다 없어야 합니다"),
     INVALID_SHOT_LOCATION(400, "위치 정보(latitude, longitude)는 둘 다 있거나 둘 다 없어야 합니다"),
     SUBSCRIPTION_ALREADY_ACTIVE(400, "이미 활성화된 구독이 있습니다"),
+    GUEST_ACCOUNT_NOT_ALLOWED(403, "게스트 계정은 결제/구독을 이용할 수 없습니다. 로그인이 필요합니다"),
     SUBSCRIPTION_REQUIRED(403, "프리미엄 구독이 필요합니다"),
     INVALID_SUBSCRIPTION_PLAN(400, "유효하지 않은 구독 플랜입니다"),
     LITE_TOKEN_INVALID(401, "유효하지 않은 라이트 모드 참여 토큰입니다"),

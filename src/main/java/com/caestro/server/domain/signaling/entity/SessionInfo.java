@@ -15,5 +15,4 @@ public class SessionInfo {
     private String cameraSocketId;
     private String status; // WAITING, CONNECTED, ENDED
     private LocalDateTime expiresAt;
-    private String liteToken; // 라이트 모드(비로그인 촬영자) 참여 토큰
 }

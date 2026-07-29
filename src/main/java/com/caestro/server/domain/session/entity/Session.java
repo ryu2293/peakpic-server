@@ -50,9 +50,6 @@ public class Session {
     @Column(nullable = false, length = 20)
     private String status;
 
-    @Column(length = 100)
-    private String liteToken;
-
     @Column(nullable = false)
     private LocalDateTime expiresAt;
 
@@ -70,8 +67,8 @@ public class Session {
      * 촬영자(카메라)가 세션에 입장했을 때 세션 상태를 연결됨(CONNECTED)으로 전환한다.
      * 카메라 유저, 카메라 모드, 연결 시각을 함께 갱신한다.
      *
-     * @param cameraUser 입장한 촬영자 유저 (라이트 모드인 경우 null)
-     * @param mode       카메라 모드 (APP / LIGHT_MODE)
+     * @param cameraUser 입장한 촬영자 유저
+     * @param mode       카메라 모드 (APP)
      */
     public void connect(User cameraUser, String mode) {
         this.camera = cameraUser;

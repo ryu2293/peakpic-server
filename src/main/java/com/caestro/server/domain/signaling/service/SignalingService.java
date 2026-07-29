@@ -29,7 +29,6 @@ public class SignalingService {
     private final ObjectMapper objectMapper;
     private final SessionService sessionService;
     private final DeviceSpecService deviceSpecService;
-    private final LiteTokenService liteTokenService;
     private final SignalingDiagnosticLogger diagnosticLogger;
     private final SignalingRelaySender relaySender;
 
@@ -41,13 +40,10 @@ public class SignalingService {
      * @param msg    클라이언트로부터 받은 세션 생성 요청 메시지
      */
     public void createSession(WebSocketSession socket, SignalingRequest msg) {
-        // 1. 8자리 세션 코드 발급
-        String sessionCode = UUID.randomUUID().toString().substring(0, 8);
+        // 1. 세션 코드 발급 (초대 링크의 비밀값 역할도 겸하므로 충분한 엔트로피 확보: 16 hex = 64bit)
+        String sessionCode = UUID.randomUUID().toString().replace("-", "").substring(0, 16);
 
-        // 2. 라이트 모드(비로그인 촬영자) 참여 토큰 발급 (세션에 귀속)
-        String liteToken = liteTokenService.issue(sessionCode);
-
-        // 3. 세션 정보 생성 및 디렉터 정보 세팅 (핸드셰이크 시 인증된 userId 포함)
+        // 2. 세션 정보 생성 및 디렉터 정보 세팅 (핸드셰이크 시 인증된 userId 포함)
         Long directorUserId = getUserId(socket);
         LocalDateTime expiresAt = LocalDateTime.now().plusMinutes(10);
         SessionInfo info = new SessionInfo();
@@ -56,20 +52,18 @@ public class SignalingService {
         info.setDirectorSocketId(socket.getId());
         info.setStatus("WAITING");
         info.setExpiresAt(expiresAt);
-        info.setLiteToken(liteToken);
 
-        // 4. Redis에 세션 정보 및 소켓-세션 매핑 저장
+        // 3. Redis에 세션 정보 및 소켓-세션 매핑 저장
         saveSessionInfo(sessionCode, info);
         redisTemplate.opsForValue().set("socket:" + socket.getId(), sessionCode, 10, TimeUnit.MINUTES);
 
-        // 5. DB에 세션 영구 저장 (Redis는 실시간 상태, DB는 영구 기록 용도)
-        sessionService.createSession(sessionCode, directorUserId, expiresAt, liteToken);
+        // 4. DB에 세션 영구 저장 (Redis는 실시간 상태, DB는 영구 기록 용도)
+        sessionService.createSession(sessionCode, directorUserId, expiresAt);
 
-        // 6. 디렉터에게 세션 생성 완료 응답 전송 (라이트 모드 참여 토큰 포함)
+        // 5. 디렉터에게 세션 생성 완료 응답 전송 (촬영자는 이 sessionCode로 입장)
         SignalingResponse response = SignalingResponse.builder()
                 .type("SESSION_CREATED")
                 .sessionCode(sessionCode)
-                .liteToken(liteToken)
                 .build();
 
         sessionManager.sendMessage(socket.getId(), response);
@@ -111,9 +105,9 @@ public class SignalingService {
         }
 
         // 4. 카메라맨 정보 세팅 및 세션 상태를 연결됨으로 변경 (핸드셰이크 시 인증된 userId 포함)
-        // 라이트 모드 참여자는 userId가 없어 cameraUserId=null, cameraMode=LIGHT_MODE로 처리
+        // 촬영자도 JWT(게스트 포함)로 접속하므로 cameraUserId가 항상 채워진다 → TURN/역할swap/지표 성립
         Long cameraUserId = getUserId(socket);
-        String cameraMode = "LITE".equals(socket.getAttributes().get("authType")) ? "LIGHT_MODE" : "APP";
+        String cameraMode = "APP";
         info.setCameraUserId(cameraUserId);
         info.setCameraSocketId(socket.getId());
         info.setStatus("CONNECTED");
@@ -124,7 +118,7 @@ public class SignalingService {
         // 디렉터 소켓의 TTL도 함께 갱신
         redisTemplate.expire("socket:" + info.getDirectorSocketId(), 10, TimeUnit.MINUTES);
 
-        // 6. DB 세션 상태를 연결됨으로 동기화 (라이트 모드면 LIGHT_MODE, 아니면 APP)
+        // 6. DB 세션 상태를 연결됨으로 동기화
         sessionService.joinSession(sessionCode, cameraUserId, cameraMode);
 
         // 7. 디렉터에게 카메라맨 입장 알림
@@ -187,8 +181,6 @@ public class SignalingService {
         if (info.getCameraSocketId() != null) {
             redisTemplate.expire("socket:" + info.getCameraSocketId(), 10, TimeUnit.MINUTES);
         }
-        // 라이트 모드 토큰도 세션과 함께 슬라이딩 갱신
-        liteTokenService.refresh(info.getLiteToken());
 
         // 4. SDP/ICE 진단 로깅 — 방향을 판별해 candidate 타입/SDP 요약을 구조화 로깅
         boolean fromDirector = socket.getId().equals(info.getDirectorSocketId());
@@ -228,23 +220,21 @@ public class SignalingService {
 
             relaySender.send(targetSocketId, disconnectMsg);
 
-            // 라이트 모드 촬영자가 이탈한 경우: 세션을 종료하지 않고 재연결 대기 상태로 되돌림
-            // (토큰은 유효하게 유지 → 같은 토큰으로 재접속 가능, F-CON-06 자동 재연결 대응)
-            boolean isLiteCameraDrop = "LITE".equals(socket.getAttributes().get("authType"))
-                    && socket.getId().equals(info.getCameraSocketId());
+            // 촬영자(카메라)가 이탈한 경우: 세션을 종료하지 않고 재연결 대기(WAITING)로 되돌림
+            // (F-CON-06 자동 재연결 대응. 원래 촬영자만 슬롯을 재획득하도록 묶는 강화는 후속 Redis 작업에서 처리)
+            boolean isCameraDrop = socket.getId().equals(info.getCameraSocketId());
 
-            if (isLiteCameraDrop) {
+            if (isCameraDrop) {
                 info.setCameraSocketId(null);
                 info.setCameraUserId(null);
                 info.setStatus("WAITING");
                 saveSessionInfo(sessionCode, info);
-                log.info("Lite camera disconnected, session kept for reconnect: {}", sessionCode);
+                log.info("Camera disconnected, session kept for reconnect: {}", sessionCode);
             } else {
-                // 디렉터 이탈 또는 일반(로그인) 촬영자 이탈: 세션 종료 + 라이트 토큰 무효화
+                // 디렉터 이탈: 세션 종료
                 info.setStatus("ENDED");
                 saveSessionInfo(sessionCode, info);
                 sessionService.endSession(sessionCode);
-                liteTokenService.invalidate(info.getLiteToken());
                 log.info("Session ended due to disconnect: {}", sessionCode);
             }
         }
@@ -269,9 +259,8 @@ public class SignalingService {
             info.setStatus("ENDED");
             saveSessionInfo(sessionCode, info);
 
-            // 3. DB 세션도 종료 상태로 동기화 + 라이트 토큰 무효화 (세션 종료 후 만료)
+            // 3. DB 세션도 종료 상태로 동기화
             sessionService.endSession(sessionCode);
-            liteTokenService.invalidate(info.getLiteToken());
 
             // 4. 상대방에게 세션 종료 알림 전송
             String targetSocketId = socket.getId().equals(info.getDirectorSocketId())

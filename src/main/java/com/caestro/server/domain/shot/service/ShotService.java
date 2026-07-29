@@ -40,10 +40,9 @@ public class ShotService {
      */
     @Transactional
     public Shot createShot(Long directorId, CreateShotRequest request) {
-        // 1. 교차 필드/enum 검증 (단일 필드 양수·범위 검증은 DTO Bean Validation에서 선처리됨)
         ShotMode mode = ShotMode.from(request.mode())
                 .orElseThrow(() -> new CustomException(ErrorCode.INVALID_SHOT_MODE));
-        // 모드-세션 정합성 검증
+
         // 협업(COLLAB)은 두 기기가 세션으로 연결된 상태이므로 session_id가 필수
         if (mode == ShotMode.COLLAB && request.sessionId() == null) {
             throw new CustomException(ErrorCode.COLLAB_REQUIRES_SESSION);
@@ -55,20 +54,27 @@ public class ShotService {
         validateDimensions(request.width(), request.height());
         validateLocation(request.latitude(), request.longitude());
 
-        // 2. 디렉터 조회 (인증된 사용자이므로 존재해야 함)
+        // 2디렉터 조회 (인증된 사용자이므로 존재해야 함)
         User director = userRepository.findById(directorId)
                 .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
 
-        // 3. 세션이 지정된 경우 조회 후 camera_id를 스냅샷으로 복사 (라이트 모드/미연결이면 null)
+        // 세션이 지정된 경우: 요청자가 세션 참여자인지 검증하고, 반대편 참여자를 카메라로 스냅샷한다.
+        // 사진을 저장하는 요청자(=현재 디렉터)를 director로, 세션의 반대편(owner↔participant)을 camera로 귀속한다.
         Session session = null;
         User camera = null;
         if (request.sessionId() != null) {
             session = sessionRepository.findById(request.sessionId())
                     .orElseThrow(() -> new CustomException(ErrorCode.SESSION_NOT_FOUND));
-            camera = session.getCamera();
+            if (!session.isParticipant(directorId)) {
+                throw new CustomException(ErrorCode.SESSION_ACCESS_DENIED);
+            }
+            User owner = session.getOwner();
+            camera = (owner != null && owner.getId().equals(directorId))
+                    ? session.getParticipant()
+                    : owner;
         }
 
-        // 4. 저장 (image_url은 항상 null, is_cloud_backed는 false, taken_at은 요청값 없으면 현재 시각)
+        // 저장 (image_url은 항상 null, is_cloud_backed는 false, taken_at은 요청값 없으면 현재 시각)
         Shot shot = Shot.builder()
                 .session(session)
                 .director(director)

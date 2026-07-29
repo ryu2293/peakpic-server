@@ -40,6 +40,7 @@ public class SignalingWebSocketHandler extends TextWebSocketHandler {
                 case "JOIN_SESSION" -> signalingService.joinSession(session, msg);
                 case "DEVICE_SPEC" -> signalingService.handleDeviceSpec(session, msg);
                 case "OFFER", "ANSWER", "ICE_CANDIDATE" -> signalingService.relay(session, msg);
+                case "SWAP_ROLE" -> signalingService.swapRoles(session, msg);
                 case "END_SESSION" -> signalingService.endSession(session, msg);
                 default -> log.warn("Unknown message type: {}", msg.type());
             }

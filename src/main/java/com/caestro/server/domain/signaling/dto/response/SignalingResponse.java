@@ -14,7 +14,6 @@ public record SignalingResponse(
         String sdpMid,
         Integer sdpMLineIndex,
         String candidate,
-        String message, // 에러나 시스템 메시지용
-        String liteToken // 라이트 모드 참여 토큰 (SESSION_CREATED 응답에 포함)
+        String message // 에러나 시스템 메시지용
 ) {
 }

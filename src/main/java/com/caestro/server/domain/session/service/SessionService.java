@@ -25,12 +25,11 @@ public class SessionService {
      * @param sessionCode    발급된 세션 코드
      * @param directorUserId 세션을 생성한 디렉터의 유저 ID
      * @param expiresAt      세션 만료 시각
-     * @param liteToken      라이트 모드(비로그인 촬영자) 참여 토큰
      * @return 저장된 Session 엔티티
      * @throws CustomException USER_NOT_FOUND - 디렉터 유저를 찾을 수 없음
      */
     @Transactional
-    public Session createSession(String sessionCode, Long directorUserId, LocalDateTime expiresAt, String liteToken) {
+    public Session createSession(String sessionCode, Long directorUserId, LocalDateTime expiresAt) {
         // 1. 디렉터 유저 조회 (없으면 예외)
         User director = userRepository.findById(directorUserId)
                 .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
@@ -41,7 +40,6 @@ public class SessionService {
                 .director(director)
                 .cameraMode("APP")
                 .status("WAITING")
-                .liteToken(liteToken)
                 .expiresAt(expiresAt)
                 .build();
 
@@ -54,8 +52,8 @@ public class SessionService {
      * 시그널링 서버에서 Redis 상태를 갱신한 뒤 DB 상태를 동기화하기 위해 호출된다.
      *
      * @param sessionCode  입장할 세션 코드
-     * @param cameraUserId 촬영자 유저 ID (라이트 모드인 경우 null)
-     * @param cameraMode   카메라 모드 (APP / LIGHT_MODE)
+     * @param cameraUserId 촬영자 유저 ID
+     * @param cameraMode   카메라 모드 (APP)
      * @throws CustomException SESSION_NOT_FOUND - 세션을 찾을 수 없음
      * @throws CustomException USER_NOT_FOUND - 촬영자 유저를 찾을 수 없음
      */

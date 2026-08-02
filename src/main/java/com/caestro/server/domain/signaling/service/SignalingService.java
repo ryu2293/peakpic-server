@@ -5,6 +5,7 @@ import com.caestro.server.domain.session.service.SessionService;
 import com.caestro.server.domain.signaling.dto.request.SignalingRequest;
 import com.caestro.server.domain.signaling.dto.response.SignalingResponse;
 import com.caestro.server.domain.signaling.entity.SessionInfo;
+import com.caestro.server.global.exception.CustomException;
 import com.caestro.server.global.exception.error.ErrorCode;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -14,8 +15,8 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.web.socket.WebSocketSession;
 
+import java.security.SecureRandom;
 import java.time.LocalDateTime;
-import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 @Slf4j
@@ -31,6 +32,12 @@ public class SignalingService {
     private final SignalingDiagnosticLogger diagnosticLogger;
     private final SignalingRelaySender relaySender;
 
+    private static final char[] CODE_ALPHABET =
+            "0123456789ABCDEFGHJKMNPQRSTVWXYZ".toCharArray();
+    private static final int CODE_LENGTH = 6;
+    private static final int CODE_GENERATION_MAX_ATTEMPTS = 5;
+    private final SecureRandom secureRandom = new SecureRandom();
+
     /**
      * 방을 만든 사람(owner)이 새로운 WebRTC 세션을 생성합니다.
      * 세션 코드를 발급하고 Redis에 대기(WAITING) 상태로 저장한 뒤 클라이언트에게 코드를 반환합니다.
@@ -40,8 +47,8 @@ public class SignalingService {
      * @param msg    클라이언트로부터 받은 세션 생성 요청 메시지
      */
     public void createSession(WebSocketSession socket, SignalingRequest msg) {
-        // 1. 세션 코드 발급 (초대 링크의 비밀값 역할도 겸하므로 충분한 엔트로피 확보: 16 hex = 64bit)
-        String sessionCode = UUID.randomUUID().toString().replace("-", "").substring(0, 16);
+        // 1. 세션 코드 발급
+        String sessionCode = generateUniqueSessionCode();
 
         // 2. 세션 정보 생성 및 owner(생성자) 세팅. 생성자가 시작 디렉터가 된다.
         Long ownerUserId = getUserId(socket);
@@ -79,8 +86,8 @@ public class SignalingService {
      * @param msg    입장할 세션 코드(sessionCode)가 담긴 요청 메시지
      */
     public void joinSession(WebSocketSession socket, SignalingRequest msg) {
-        // 1. 세션 코드로 방 정보 조회
-        String sessionCode = msg.sessionCode();
+        // 1. 세션 코드로 방 정보 조회 (수동 입력 대비 공백 제거 + 대문자 정규화)
+        String sessionCode = normalizeSessionCode(msg.sessionCode());
         SessionInfo info = getSessionInfo(sessionCode);
 
         // 2. 존재하지 않는 세션이면 에러 응답
@@ -177,7 +184,7 @@ public class SignalingService {
         try {
             Long userId = getUserId(socket);
             deviceSpecService.saveDeviceSpec(
-                    msg.sessionCode(),
+                    normalizeSessionCode(msg.sessionCode()),
                     userId,
                     msg.maxZoom(),
                     msg.minZoom(),
@@ -324,6 +331,40 @@ public class SignalingService {
                 .message(errorCode.getMessage())
                 .build();
         sessionManager.sendMessage(socket.getId(), errorResponse);
+    }
+
+    /**
+     * 활성 세션과 충돌하지 않는 짧은 세션 코드를 발급한다.
+     * Crockford Base32 알파벳으로 6자를 SecureRandom으로 생성하고, Redis에 동일 코드가 있으면 재시도한다.
+     *
+     * @return 활성 세션 기준으로 유일한 6자 세션 코드
+     * @throws CustomException SESSION_CODE_GENERATION_FAILED - 최대 재시도 내 유일 코드 발급 실패
+     */
+    private String generateUniqueSessionCode() {
+        for (int attempt = 0; attempt < CODE_GENERATION_MAX_ATTEMPTS; attempt++) {
+            StringBuilder sb = new StringBuilder(CODE_LENGTH);
+            for (int i = 0; i < CODE_LENGTH; i++) {
+                sb.append(CODE_ALPHABET[secureRandom.nextInt(CODE_ALPHABET.length)]);
+            }
+            String code = sb.toString();
+
+            // 활성 세션(session:{code})에 없을 때만 채택
+            if (Boolean.FALSE.equals(redisTemplate.hasKey("session:" + code))) {
+                return code;
+            }
+        }
+        throw new CustomException(ErrorCode.SESSION_CODE_GENERATION_FAILED);
+    }
+
+    /**
+     * 사용자가 수동 입력한 세션 코드를 정규화한다. (앞뒤 공백 제거 + 대문자 변환)
+     * QR/텍스트 어느 경로로 들어오든 발급 시 형식(대문자)과 일치시키기 위함이다.
+     *
+     * @param rawCode 클라이언트가 보낸 원본 세션 코드 (null 가능)
+     * @return 정규화된 코드 (입력이 null이면 null)
+     */
+    private String normalizeSessionCode(String rawCode) {
+        return rawCode == null ? null : rawCode.trim().toUpperCase();
     }
 
     /**

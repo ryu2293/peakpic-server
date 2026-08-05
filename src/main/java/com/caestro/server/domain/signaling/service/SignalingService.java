@@ -79,10 +79,13 @@ public class SignalingService {
     }
 
     /**
-     * 참여자(participant)가 발급된 세션 코드로 기존 방에 입장합니다.
-     * 방이 존재하면 상태를 연결됨(CONNECTED)으로 변경하고, owner에게 입장을 알립니다.
+     * 세션 코드로 방에 입장하거나, 네트워크 전환 등으로 끊긴 뒤 재연결(슬롯 인계)합니다.
+     * 세션 정체성은 소켓이 아니라 userId(JWT, 게스트 포함)를 기준으로 판단합니다.
+     * - 요청 userId가 기존 owner/participant 슬롯의 주인과 같으면: 소켓만 교체하고 재연결로 처리(takeover).
+     * - 슬롯이 비어 있고 신규 사용자면: 참여자로 입장.
+     * - 이미 다른 사용자가 연결된 세션이면: 거부.
      *
-     * @param socket 참여자의 웹소켓 세션 객체
+     * @param socket 입장/재연결하는 클라이언트의 웹소켓 세션 객체
      * @param msg    입장할 세션 코드(sessionCode)가 담긴 요청 메시지
      */
     public void joinSession(WebSocketSession socket, SignalingRequest msg) {
@@ -96,29 +99,41 @@ public class SignalingService {
             return;
         }
 
-        // 3. 이미 참여자가 연결된 세션이면 에러 응답
+        Long userId = getUserId(socket);
+
+        // 3. 재연결(takeover): 요청 userId가 기존 슬롯 주인과 같으면 소켓만 교체하고 복귀 처리
+        //    (네트워크 전환으로 옛 소켓이 유령으로 남아 CONNECTED여도, 본인이면 막지 않고 이어붙인다)
+        if (userId != null && userId.equals(info.getOwnerUserId())) {
+            reconnectToSlot(socket, sessionCode, info, true);
+            return;
+        }
+        if (userId != null && userId.equals(info.getParticipantUserId())) {
+            reconnectToSlot(socket, sessionCode, info, false);
+            return;
+        }
+
+        // 4. 제3자가 이미 두 명 연결된 세션에 입장 시도 → 거부
         if ("CONNECTED".equals(info.getStatus())) {
             sendError(socket, sessionCode, ErrorCode.SESSION_ALREADY_CONNECTED);
             return;
         }
 
-        // 4. 참여자 정보 세팅 및 세션 상태를 연결됨으로 변경 (참여자도 JWT(게스트 포함)라 userId가 항상 존재)
-        Long participantUserId = getUserId(socket);
+        // 5. 신규 참여자 입장 및 세션 상태를 연결됨으로 변경
         String cameraMode = "APP";
-        info.setParticipantUserId(participantUserId);
+        info.setParticipantUserId(userId);
         info.setParticipantSocketId(socket.getId());
         info.setStatus("CONNECTED");
 
-        // 5. Redis에 세션 정보 저장 및 소켓 TTL 갱신
+        // 6. Redis에 세션 정보 저장 및 소켓 TTL 갱신
         saveSessionInfo(sessionCode, info);
         redisTemplate.opsForValue().set("socket:" + socket.getId(), sessionCode, 10, TimeUnit.MINUTES);
         // owner 소켓의 TTL도 함께 갱신
         redisTemplate.expire("socket:" + info.getOwnerSocketId(), 10, TimeUnit.MINUTES);
 
-        // 6. DB 세션 상태를 연결됨으로 동기화
-        sessionService.joinSession(sessionCode, participantUserId, cameraMode);
+        // 7. DB 세션 상태를 연결됨으로 동기화
+        sessionService.joinSession(sessionCode, userId, cameraMode);
 
-        // 7. owner에게 참여자 입장 알림
+        // 8. owner에게 참여자 입장 알림
         SignalingResponse notifyOwner = SignalingResponse.builder()
                 .type("PEER_JOINED")
                 .sessionCode(sessionCode)
@@ -126,6 +141,60 @@ public class SignalingService {
         relaySender.send(info.getOwnerSocketId(), notifyOwner);
 
         log.info("Peer joined session: {}", sessionCode);
+    }
+
+    /**
+     * 같은 userId의 재연결을 처리합니다(슬롯 인계, takeover).
+     * 기존 슬롯의 socketId를 새 소켓으로 교체하고, 옛 소켓의 매핑을 제거해
+     * 뒤늦게 죽는 유령 소켓의 disconnect가 복구된 세션을 훼손하지 못하게 합니다.
+     * 재연결한 쪽에는 현재 상태 복원용 SESSION_RESUMED를, 상대에게는 PEER_RECONNECTED를 통지합니다.
+     *
+     * @param socket      재연결한 클라이언트의 새 웹소켓 세션
+     * @param sessionCode 대상 세션 코드
+     * @param info        현재 세션 상태
+     * @param isOwner     재연결 주체가 owner 슬롯이면 true, participant 슬롯이면 false
+     */
+    private void reconnectToSlot(WebSocketSession socket, String sessionCode, SessionInfo info, boolean isOwner) {
+        // 1. 옛 소켓 매핑 제거 — 뒤늦게 끊기는 유령 소켓이 handleDisconnect로 세션을 종료/훼손하는 것 방지
+        String oldSocketId = isOwner ? info.getOwnerSocketId() : info.getParticipantSocketId();
+        if (oldSocketId != null) {
+            redisTemplate.delete("socket:" + oldSocketId);
+        }
+
+        // 2. 슬롯의 socketId만 새 소켓으로 교체 (정체성=userId는 유지, "전화선"만 갱신)
+        if (isOwner) {
+            info.setOwnerSocketId(socket.getId());
+        } else {
+            info.setParticipantSocketId(socket.getId());
+            info.setStatus("CONNECTED"); // 유령이 WAITING으로 돌려놨을 수 있으니 연결 상태로 복구
+        }
+        saveSessionInfo(sessionCode, info);
+
+        // 3. 새 소켓 매핑 등록 + 상대 슬롯 TTL 갱신
+        redisTemplate.opsForValue().set("socket:" + socket.getId(), sessionCode, 10, TimeUnit.MINUTES);
+        String peerSocketId = isOwner ? info.getParticipantSocketId() : info.getOwnerSocketId();
+        if (peerSocketId != null) {
+            redisTemplate.expire("socket:" + peerSocketId, 10, TimeUnit.MINUTES);
+        }
+
+        // 4. 재연결한 쪽에 현재 상태(디렉터 포인터)를 담아 SESSION_RESUMED 전송 (화면 복원용)
+        SignalingResponse resumed = SignalingResponse.builder()
+                .type("SESSION_RESUMED")
+                .sessionCode(sessionCode)
+                .currentDirectorUserId(info.getCurrentDirectorUserId())
+                .build();
+        sessionManager.sendMessage(socket.getId(), resumed);
+
+        // 5. 상대가 남아 있으면 재연결 알림 (신규 입장 PEER_JOINED와 구분)
+        if (peerSocketId != null) {
+            SignalingResponse peerNotify = SignalingResponse.builder()
+                    .type("PEER_RECONNECTED")
+                    .sessionCode(sessionCode)
+                    .build();
+            relaySender.send(peerSocketId, peerNotify);
+        }
+
+        log.info("Reconnected to session {} as {}", sessionCode, isOwner ? "owner" : "participant");
     }
 
     /**

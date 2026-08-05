@@ -112,8 +112,9 @@ public class SignalingService {
             return;
         }
 
-        // 4. 제3자가 이미 두 명 연결된 세션에 입장 시도 → 거부
-        if ("CONNECTED".equals(info.getStatus())) {
+        // 4. 제3자인데 참여자 자리가 이미 다른 사용자로 차 있으면 거부
+        //    (방장 재연결 유예로 status가 WAITING이어도, 참여자 슬롯이 있으면 난입을 막는다)
+        if (info.getParticipantUserId() != null) {
             sendError(socket, sessionCode, ErrorCode.SESSION_ALREADY_CONNECTED);
             return;
         }
@@ -166,8 +167,10 @@ public class SignalingService {
             info.setOwnerSocketId(socket.getId());
         } else {
             info.setParticipantSocketId(socket.getId());
-            info.setStatus("CONNECTED"); // 유령이 WAITING으로 돌려놨을 수 있으니 연결 상태로 복구
         }
+        // 두 슬롯이 모두 사용자로 차 있으면 CONNECTED, 아니면(상대가 아직 유예/부재) WAITING으로 정정
+        boolean bothPresent = info.getOwnerUserId() != null && info.getParticipantUserId() != null;
+        info.setStatus(bothPresent ? "CONNECTED" : "WAITING");
         saveSessionInfo(sessionCode, info);
 
         // 3. 새 소켓 매핑 등록 + 상대 슬롯 TTL 갱신
@@ -343,11 +346,13 @@ public class SignalingService {
                 saveSessionInfo(sessionCode, info);
                 log.info("Participant disconnected, session kept for reconnect: {}", sessionCode);
             } else {
-                // owner 이탈: 세션 종료 (방의 주인이 나가면 방을 닫는다)
-                info.setStatus("ENDED");
+                // 방장 이탈: 즉시 종료하지 않고 재연결을 유예한다(Redis TTL 동안 대기).
+                // ownerUserId는 유지해, 같은 방장이 JOIN_SESSION으로 슬롯을 인계(takeover)받을 수 있게 한다.
+                // 유예 안에 돌아오지 않으면 세션은 TTL로 자연 만료된다.
+                info.setOwnerSocketId(null);
+                info.setStatus("WAITING");
                 saveSessionInfo(sessionCode, info);
-                sessionService.endSession(sessionCode);
-                log.info("Session ended due to disconnect: {}", sessionCode);
+                log.info("Owner disconnected, session kept for reconnect (grace via TTL): {}", sessionCode);
             }
         }
 

@@ -396,6 +396,28 @@ public class SignalingService {
     }
 
     /**
+     * 하트비트(PING)를 처리한다.
+     * 연결 유지를 위해 PONG으로 응답하고, 세션에 소속된 소켓이면 Redis TTL을 연장해
+     * 조용한 촬영 중에도 방/소켓 상태가 만료되지 않게 한다.
+     *
+     * @param socket PING을 보낸 클라이언트의 웹소켓 세션
+     */
+    public void handlePing(WebSocketSession socket) {
+        // 세션에 소속된 소켓이면 방·소켓 TTL을 함께 연장 (조용한 세션의 조기 만료 방지)
+        String sessionCode = redisTemplate.opsForValue().get("socket:" + socket.getId());
+        if (sessionCode != null) {
+            redisTemplate.expire("socket:" + socket.getId(), 10, TimeUnit.MINUTES);
+            redisTemplate.expire("session:" + sessionCode, 10, TimeUnit.MINUTES);
+        }
+
+        // 연결 유지를 위해 PONG 응답
+        SignalingResponse pong = SignalingResponse.builder()
+                .type("PONG")
+                .build();
+        sessionManager.sendMessage(socket.getId(), pong);
+    }
+
+    /**
      * 에러 응답을 보낸 클라이언트에게 직접 전송한다.
      */
     private void sendError(WebSocketSession socket, String sessionCode, ErrorCode errorCode) {

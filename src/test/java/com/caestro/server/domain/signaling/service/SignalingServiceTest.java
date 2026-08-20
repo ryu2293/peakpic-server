@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.startsWith;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
@@ -70,7 +71,8 @@ class SignalingServiceTest {
         signalingService = new SignalingService(
                 redisTemplate, sessionManager, objectMapper,
                 sessionService, deviceSpecService, diagnosticLogger, relaySender);
-        given(redisTemplate.opsForValue()).willReturn(valueOperations);
+        // 일부 경로(OCCUPIED 등)는 opsForValue를 쓰지 않으므로 lenient로 스텁
+        lenient().when(redisTemplate.opsForValue()).thenReturn(valueOperations);
     }
 
     /** 두 슬롯이 모두 찬 CONNECTED 세션을 Redis 모킹에 심는다. */
@@ -101,6 +103,50 @@ class SignalingServiceTest {
         verify(valueOperations, never()).set(startsWith("session:"), any(), anyLong(), any()); // 세션 미변경
         verify(relaySender, never()).send(any(), any());                                      // 가짜 알림 없음
         verify(redisTemplate).delete("socket:ghost-sock");                                    // 매핑만 정리
+    }
+
+    @Test
+    @DisplayName("JOIN: 스크립트가 CLAIMED를 반환하면 매핑 등록·DB 동기화·PEER_JOINED 알림을 수행한다")
+    void joinSession_claimed_completesJoin() throws Exception {
+        SessionInfo info = new SessionInfo();
+        info.setOwnerUserId(1L);
+        info.setOwnerSocketId(OWNER_SOCKET);
+        info.setParticipantUserId(2L);
+        info.setStatus("CONNECTED");
+        given(socket.getId()).willReturn("p-sock");
+        given(socket.getAttributes()).willReturn(java.util.Map.of("userId", 2L));
+        given(redisTemplate.execute(org.mockito.ArgumentMatchers.<org.springframework.data.redis.core.script.RedisScript<String>>any(),
+                org.mockito.ArgumentMatchers.anyList(), any(), any(), any())).willReturn("CLAIMED");
+        given(valueOperations.get("session:" + SESSION_CODE))
+                .willReturn(objectMapper.writeValueAsString(info));
+
+        signalingService.joinSession(socket, joinRequest(SESSION_CODE));
+
+        verify(valueOperations).set(eq("socket:p-sock"), eq(SESSION_CODE), anyLong(), any(TimeUnit.class));
+        verify(redisTemplate).expire(eq("socket:" + OWNER_SOCKET), anyLong(), any(TimeUnit.class));
+        verify(sessionService).joinSession(SESSION_CODE, 2L, "APP");
+        verify(relaySender).send(eq(OWNER_SOCKET), any());
+    }
+
+    @Test
+    @DisplayName("JOIN: 스크립트가 OCCUPIED를 반환하면 에러만 보내고 아무것도 변경하지 않는다")
+    void joinSession_occupied_sendsErrorOnly() {
+        given(socket.getId()).willReturn("late-sock");
+        given(socket.getAttributes()).willReturn(java.util.Map.of("userId", 3L));
+        given(redisTemplate.execute(org.mockito.ArgumentMatchers.<org.springframework.data.redis.core.script.RedisScript<String>>any(),
+                org.mockito.ArgumentMatchers.anyList(), any(), any(), any())).willReturn("OCCUPIED");
+
+        signalingService.joinSession(socket, joinRequest(SESSION_CODE));
+
+        verify(sessionManager).sendMessage(eq("late-sock"), any()); // ERROR 응답
+        verify(sessionService, never()).joinSession(any(), any(), any());
+        verify(valueOperations, never()).set(any(), any(), anyLong(), any());
+    }
+
+    private com.caestro.server.domain.signaling.dto.request.SignalingRequest joinRequest(String code) {
+        return new com.caestro.server.domain.signaling.dto.request.SignalingRequest(
+                "JOIN_SESSION", code, null, null, null, null, null, null,
+                null, null, null, null, null, null);
     }
 
     @Test

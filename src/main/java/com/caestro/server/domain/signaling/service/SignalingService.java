@@ -323,7 +323,21 @@ public class SignalingService {
         // 2. 세션에 상대방이 남아있으면 연결 끊김을 알림
         SessionInfo info = getSessionInfo(sessionCode);
         if (info != null) {
-            String targetSocketId = socket.getId().equals(info.getOwnerSocketId())
+            boolean isOwnerDrop = socket.getId().equals(info.getOwnerSocketId());
+            boolean isParticipantDrop = socket.getId().equals(info.getParticipantSocketId());
+
+            // 유령 소켓 가드: 어느 슬롯과도 일치하지 않는 소켓의 늦은 disconnect는 세션을 건드리면 안 된다.
+            // 재연결(takeover)이 슬롯의 socketId를 이미 새 소켓으로 교체한 경우가 여기 해당한다.
+            // takeover 시 옛 소켓 매핑 삭제라는 1차 방어가 있지만, 다중 인스턴스에서는
+            // "매핑 조회 ~ 삭제" 사이 레이스로 여기까지 도달할 수 있다. 가드 없이는
+            // "참여자가 아니면 방장"이라는 이분법에 걸려 방장 이탈로 오분류되었다.
+            if (!isOwnerDrop && !isParticipantDrop) {
+                redisTemplate.delete("socket:" + socket.getId());
+                log.info("Stale socket disconnect ignored: {} (session {})", socket.getId(), sessionCode);
+                return;
+            }
+
+            String targetSocketId = isOwnerDrop
                     ? info.getParticipantSocketId()
                     : info.getOwnerSocketId();
 
@@ -335,9 +349,6 @@ public class SignalingService {
             relaySender.send(targetSocketId, disconnectMsg);
 
             // 참여자가 이탈한 경우: 세션을 종료하지 않고 재연결 대기(WAITING)로 되돌림
-            // (원래 참여자만 슬롯을 재획득하도록 묶는 강화는 후속 Redis 작업에서 처리)
-            boolean isParticipantDrop = socket.getId().equals(info.getParticipantSocketId());
-
             if (isParticipantDrop) {
                 info.setParticipantSocketId(null);
                 info.setParticipantUserId(null);

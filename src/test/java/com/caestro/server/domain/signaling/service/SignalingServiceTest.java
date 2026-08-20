@@ -27,12 +27,8 @@ import org.springframework.web.socket.WebSocketSession;
 
 /**
  * handleDisconnect의 소켓-슬롯 일치 검증 테스트.
- *
- * 배경: 재연결(takeover) 시 옛 소켓의 Redis 매핑을 지워 유령 disconnect를 막지만(1차 방어),
- * 다중 인스턴스에서는 "매핑 조회 ~ 삭제" 사이 레이스 창이 넓어진다.
- * 이 창에서 유령 소켓의 disconnect가 처리되면, 어느 슬롯과도 일치하지 않는 소켓임에도
- * 방장 이탈로 오분류되어 갓 복구된 세션의 ownerSocketId를 null로 되돌리고
- * 잘못된 PEER_DISCONNECTED까지 발송하는 결함이 있었다.
+ * takeover로 이미 교체된 옛 소켓(유령)의 늦은 disconnect가 방장 이탈로 오분류되어
+ * 세션을 훼손하던 결함(#73)의 재현·방어를 검증한다.
  */
 @ExtendWith(MockitoExtension.class)
 class SignalingServiceTest {
@@ -77,9 +73,7 @@ class SignalingServiceTest {
         given(redisTemplate.opsForValue()).willReturn(valueOperations);
     }
 
-    /**
-     * owner=o1/participant=p1으로 모두 차 있는 정상 세션을 Redis 모킹에 심는다.
-     */
+    /** 두 슬롯이 모두 찬 CONNECTED 세션을 Redis 모킹에 심는다. */
     private void givenConnectedSession(String disconnectingSocketId) throws Exception {
         SessionInfo info = new SessionInfo();
         info.setSessionCode(SESSION_CODE);
@@ -99,17 +93,14 @@ class SignalingServiceTest {
     @Test
     @DisplayName("유령 소켓(어느 슬롯과도 불일치)의 disconnect는 세션을 훼손하지 않고 매핑만 정리한다")
     void handleDisconnect_ghostSocket_doesNotTouchSession() throws Exception {
-        // 유령: takeover로 이미 슬롯에서 교체된 옛 소켓 — owner/participant 어느 쪽 socketId와도 다르다
+        // 유령: takeover로 이미 슬롯에서 교체된 옛 소켓
         givenConnectedSession("ghost-sock");
 
         signalingService.handleDisconnect(socket);
 
-        // 1. 세션 상태를 저장(변경)하면 안 된다 — 방장 이탈로 오분류되어 ownerSocketId=null 되는 결함 방지
-        verify(valueOperations, never()).set(startsWith("session:"), any(), anyLong(), any());
-        // 2. 잘못된 PEER_DISCONNECTED를 보내면 안 된다
-        verify(relaySender, never()).send(any(), any());
-        // 3. 유령 소켓의 매핑은 정리한다
-        verify(redisTemplate).delete("socket:ghost-sock");
+        verify(valueOperations, never()).set(startsWith("session:"), any(), anyLong(), any()); // 세션 미변경
+        verify(relaySender, never()).send(any(), any());                                      // 가짜 알림 없음
+        verify(redisTemplate).delete("socket:ghost-sock");                                    // 매핑만 정리
     }
 
     @Test

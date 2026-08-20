@@ -326,11 +326,8 @@ public class SignalingService {
             boolean isOwnerDrop = socket.getId().equals(info.getOwnerSocketId());
             boolean isParticipantDrop = socket.getId().equals(info.getParticipantSocketId());
 
-            // 유령 소켓 가드: 어느 슬롯과도 일치하지 않는 소켓의 늦은 disconnect는 세션을 건드리면 안 된다.
-            // 재연결(takeover)이 슬롯의 socketId를 이미 새 소켓으로 교체한 경우가 여기 해당한다.
-            // takeover 시 옛 소켓 매핑 삭제라는 1차 방어가 있지만, 다중 인스턴스에서는
-            // "매핑 조회 ~ 삭제" 사이 레이스로 여기까지 도달할 수 있다. 가드 없이는
-            // "참여자가 아니면 방장"이라는 이분법에 걸려 방장 이탈로 오분류되었다.
+            // 유령 소켓 가드: 어느 슬롯과도 일치하지 않으면(takeover로 이미 교체된 옛 소켓)
+            // 세션을 건드리지 않고 매핑만 정리한다. 없으면 "참여자 아니면 방장" 이분법에 걸려 오분류된다.
             if (!isOwnerDrop && !isParticipantDrop) {
                 redisTemplate.delete("socket:" + socket.getId());
                 log.info("Stale socket disconnect ignored: {} (session {})", socket.getId(), sessionCode);

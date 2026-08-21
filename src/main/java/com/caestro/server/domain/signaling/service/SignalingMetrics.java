@@ -21,6 +21,8 @@ public class SignalingMetrics {
     private final Counter sessionCreated;
     private final Counter sessionEnded;
     private final Counter reaperClosed;
+    // gauge는 상태 객체를 약참조로 잡으므로, GC되지 않도록 이 빈(영구 생존)이 supplier를 강참조로 보관한다
+    private volatile Supplier<Number> activeConnections = () -> 0;
 
     public SignalingMetrics(MeterRegistry registry) {
         this.registry = registry;
@@ -38,11 +40,14 @@ public class SignalingMetrics {
         this.relayNoReceiver = Counter.builder("ws.relay.no_receiver")
                 .description("Pub/Sub 발행 시 수신 인스턴스가 0이었던 횟수 (메시지 유실 신호)")
                 .register(registry);
-        this.sessionCreated = Counter.builder("ws.session.created")
-                .description("생성된 시그널링 세션 수")
+        // 주의: 이름을 ...created로 끝내면 OpenMetrics 예약 접미사(_created)와 충돌해 잘린다 → event 태그로 구분
+        this.sessionCreated = Counter.builder("ws.session")
+                .tag("event", "created")
+                .description("시그널링 세션 수명주기 이벤트")
                 .register(registry);
-        this.sessionEnded = Counter.builder("ws.session.ended")
-                .description("명시적으로 종료된 시그널링 세션 수")
+        this.sessionEnded = Counter.builder("ws.session")
+                .tag("event", "ended")
+                .description("시그널링 세션 수명주기 이벤트")
                 .register(registry);
         this.reaperClosed = Counter.builder("ws.reaper.closed")
                 .description("리퍼가 정리한 유휴 소켓 수 (급증 시 클라 PING 미동작 신호)")
@@ -51,7 +56,8 @@ public class SignalingMetrics {
 
     /** 활성 WS 연결 수 gauge 등록. (호출 시점의 값을 읽어가는 방식이라 supplier로 받는다) */
     public void bindActiveConnections(Supplier<Number> activeCount) {
-        Gauge.builder("ws.connections.active", activeCount, s -> s.get().doubleValue())
+        this.activeConnections = activeCount;
+        Gauge.builder("ws.connections.active", this, m -> m.activeConnections.get().doubleValue())
                 .description("이 인스턴스의 활성 WebSocket 연결 수")
                 .register(registry);
     }

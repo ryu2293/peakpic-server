@@ -51,8 +51,8 @@ class SignalingMetricsTest {
 
         assertThat(registry.get("ws.relay.no_receiver").counter().count()).isEqualTo(1);
         assertThat(registry.get("ws.reaper.closed").counter().count()).isEqualTo(3);
-        assertThat(registry.get("ws.session.created").counter().count()).isEqualTo(1);
-        assertThat(registry.get("ws.session.ended").counter().count()).isEqualTo(1);
+        assertThat(registry.get("ws.session").tag("event", "created").counter().count()).isEqualTo(1);
+        assertThat(registry.get("ws.session").tag("event", "ended").counter().count()).isEqualTo(1);
     }
 
     @Test

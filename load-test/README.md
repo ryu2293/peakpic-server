@@ -48,6 +48,7 @@ k6 run -e SCENARIO=ramp k6/signaling-session.js
 | `SESSION_SEC` | 40 (smoke 8) | 세션 1개 수명 — 이후 END_SESSION |
 | `ICE_BURST` | 10 | 연결 수립 시 측당 ICE 후보 수 |
 | `SDP_KB` | 4 | OFFER/ANSWER 크기. **9 이상 → 톰캣 인바운드 한도(기본 8KB) 실험** |
+| `JITTER` | 1 | 0이면 시작·수명 지터 해제 → **전 VU 동시 몰림(스파이크) 조건 재현** |
 
 세션 흐름: 게스트 로그인(VU당 1회) → CREATE → JOIN → DEVICE_SPEC×2 → OFFER/ANSWER →
 ICE 버스트(양측) → PING 25s 유지 → END_SESSION.

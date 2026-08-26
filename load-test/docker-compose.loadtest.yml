@@ -46,8 +46,8 @@ services:
       SPRING_PROFILES_ACTIVE: dev
       # dev 프로파일의 localhost 접속 정보를 컨테이너 네트워크 기준으로 덮어쓴다
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/caestro?serverTimezone=UTC&characterEncoding=UTF-8
-      SPRING_DATA_REDIS_HOST: redis
-      SPRING_DATA_REDIS_PORT: "6379"
+      # dev yml이 host/port가 아니라 url 방식이므로 url을 덮어써야 한다 (url이 host/port보다 우선)
+      SPRING_DATA_REDIS_URL: redis://redis:6379
     # t3.micro 근사: 2 vCPU(버스트 상태) + 1GB. CPU 크레딧 고갈(기준선 강등)은 로컬에서 재현 불가 —
     # 절대값 비교는 운영 최종 검증에서, 로컬은 개선 전/후 "상대 비교"에 쓴다.
     cpus: 2.0

@@ -31,6 +31,7 @@ const ICE_BURST = Number(__ENV.ICE_BURST || 10);     // 연결 수립 시 측당
 const SDP_KB = Number(__ENV.SDP_KB || 4);            // OFFER/ANSWER 크기(KB)
 const PING_SEC = 25;                                 // 실제 클라이언트 하트비트 주기와 동일
 const ESTABLISH_TIMEOUT_MS = 15000;
+const JITTER = __ENV.JITTER !== '0';                 // 0이면 지터 해제 → 동시 몰림(스파이크) 조건 재현
 
 // ═══ 커스텀 지표 ═══
 const relayIceE2e = new Trend('relay_ice_e2e_ms');       // ICE 편도 지연 (소형 페이로드)
@@ -85,9 +86,22 @@ function guestLogin(role) {
     return res.json('accessToken');
 }
 
+let firstIteration = true;
+
 export default function () {
     if (!tokens) tokens = { owner: guestLogin('owner'), participant: guestLogin('part') };
 
+    // 파도 동기화 방지(1차 측정에서 관측): VU 전원이 같은 주기로 시작·종료하면
+    // 실사용에 없는 동시 수립 스파이크가 생긴다 → 시작 시점과 세션 수명을 무작위로 흩뜨린다.
+    const startDelayMs = (JITTER && SCENARIO !== 'smoke' && firstIteration) ? Math.random() * 20000 : 0;
+    firstIteration = false;
+    const sessionLifeMs = SESSION_SEC * 1000
+            + (JITTER && SCENARIO !== 'smoke' ? Math.floor(Math.random() * 10000) : 0);
+
+    setTimeout(() => runSession(sessionLifeMs), startDelayMs);
+}
+
+function runSession(sessionLifeMs) {
     let sessionCode = null;
     let established = false;
     let done = false;
@@ -113,7 +127,7 @@ export default function () {
     timeouts.push(setTimeout(() => {
         if (!established) { signalingErrors.add(1); finish(false); }
     }, ESTABLISH_TIMEOUT_MS));
-    timeouts.push(setTimeout(() => finish(established), ESTABLISH_TIMEOUT_MS + SESSION_SEC * 1000));
+    timeouts.push(setTimeout(() => finish(established), ESTABLISH_TIMEOUT_MS + sessionLifeMs));
 
     // ── 공통 도우미 ──
     const send = (sock, obj) => { if (!done) sock.send(JSON.stringify(obj)); };
@@ -177,7 +191,7 @@ export default function () {
                 timeouts.push(setTimeout(() => {
                     send(owner, { type: 'END_SESSION', sessionCode });
                     timeouts.push(setTimeout(() => finish(true), 1000)); // 상대의 SESSION_ENDED 수신 여유
-                }, SESSION_SEC * 1000));
+                }, sessionLifeMs));
                 break;
             case 'OFFER': case 'ANSWER': case 'ICE_CANDIDATE': case 'DEVICE_SPEC':
                 onRelayed(m);

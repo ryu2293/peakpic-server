@@ -336,13 +336,19 @@ public class SignalingService {
      * @param socket 연결이 끊어진 클라이언트의 웹소켓 세션
      */
     public void handleDisconnect(WebSocketSession socket) {
-        // 1. 소켓ID로 세션 코드 조회
         String sessionCode = redisTemplate.opsForValue().get("socket:" + socket.getId());
         if (sessionCode == null) return;
 
-        // 2. 세션에 상대방이 남아있으면 연결 끊김을 알림
+        // 세션에 상대방이 남아있으면 연결 끊김을 알림
         SessionInfo info = getSessionInfo(sessionCode);
         if (info != null) {
+            // 없으면 이미 닫힌 상대에게 PEER_DISCONNECTED를 발행(수신자 0)하고 ENDED를 WAITING으로 부활시킨다.
+            if ("ENDED".equals(info.getStatus())) {
+                redisTemplate.delete("socket:" + socket.getId());
+                log.info("Disconnect after session end ignored: {} (session {})", socket.getId(), sessionCode);
+                return;
+            }
+
             boolean isOwnerDrop = socket.getId().equals(info.getOwnerSocketId());
             boolean isParticipantDrop = socket.getId().equals(info.getParticipantSocketId());
 

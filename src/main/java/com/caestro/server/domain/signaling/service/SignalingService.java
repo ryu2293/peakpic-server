@@ -46,6 +46,10 @@ public class SignalingService {
     private static final RedisScript<String> JOIN_SLOT_CLAIM_SCRIPT =
             RedisScript.of(new ClassPathResource("scripts/join_slot_claim.lua"), String.class);
 
+    // relay 조회+수명연장 스크립트 (#98) — 5왕복(GET·GET·PEXPIRE×3)을 1왕복으로 통합
+    private static final RedisScript<String> RELAY_TOUCH_SCRIPT =
+            RedisScript.of(new ClassPathResource("scripts/relay_touch.lua"), String.class);
+
     private final SecureRandom secureRandom = new SecureRandom();
 
     /**
@@ -301,27 +305,23 @@ public class SignalingService {
      * @param msg    중계할 WebRTC 시그널링 데이터 또는 커스텀 제어 신호
      */
     public void relay(WebSocketSession socket, SignalingRequest msg) {
-        // 1. 소켓ID로 세션 코드 조회
-        String sessionCode = redisTemplate.opsForValue().get("socket:" + socket.getId());
-        if (sessionCode == null) return;
+        // 조회+수명연장을 Lua 1왕복으로 통합 (#98) — 기존 5왕복(GET·GET·PEXPIRE×3)과 동일 의미.
+        // 몰림 시 단일 커넥션 대기열에 서는 횟수 자체가 줄어 스파이크 내성이 올라간다.
+        String raw = redisTemplate.execute(RELAY_TOUCH_SCRIPT,
+                List.of("socket:" + socket.getId()),
+                String.valueOf(SESSION_TTL_SECONDS * 1000));
+        if (raw == null) return;
 
-        // 2. 세션 코드로 방 정보 조회
-        SessionInfo info = getSessionInfo(sessionCode);
+        SessionInfo info = parseSessionInfo(raw);
         if (info == null) return;
+        String sessionCode = info.getSessionCode();
 
-        // 3. 슬라이딩 세션: 메시지를 주고받을 때마다 방과 소켓의 수명을 10분으로 연장
-        redisTemplate.expire("session:" + sessionCode, 10, TimeUnit.MINUTES);
-        redisTemplate.expire("socket:" + info.getOwnerSocketId(), 10, TimeUnit.MINUTES);
-        if (info.getParticipantSocketId() != null) {
-            redisTemplate.expire("socket:" + info.getParticipantSocketId(), 10, TimeUnit.MINUTES);
-        }
-
-        // 4. SDP/ICE 진단 로깅 — 어느 엔드포인트가 보냈는지(정체성 기준) 판별해 구조화 로깅
+        // SDP/ICE 진단 로깅 — 어느 엔드포인트가 보냈는지(정체성 기준) 판별해 구조화 로깅
         boolean fromOwner = socket.getId().equals(info.getOwnerSocketId());
         String direction = fromOwner ? "owner->participant" : "participant->owner";
         diagnosticLogger.logRelayed(msg, sessionCode, direction);
 
-        // 5. 보낸 사람의 반대편 소켓으로 메시지 중계 (다른 인스턴스면 Redis 발행으로 자동 처리)
+        // 3. 보낸 사람의 반대편 소켓으로 메시지 중계 (다른 인스턴스면 Redis 발행으로 자동 처리)
         String targetSocketId = fromOwner
                 ? info.getParticipantSocketId()
                 : info.getOwnerSocketId();
@@ -507,6 +507,13 @@ public class SignalingService {
     private SessionInfo getSessionInfo(String sessionCode) {
         String raw = redisTemplate.opsForValue().get("session:" + sessionCode);
         if (raw == null) return null;
+        return parseSessionInfo(raw);
+    }
+
+    /**
+     * 세션 JSON 원문을 SessionInfo로 역직렬화한다. (파싱 실패 시 null)
+     */
+    private SessionInfo parseSessionInfo(String raw) {
         try {
             return objectMapper.readValue(raw, SessionInfo.class);
         } catch (JsonProcessingException e) {

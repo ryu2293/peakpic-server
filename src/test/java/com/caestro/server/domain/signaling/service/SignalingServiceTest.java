@@ -59,6 +59,9 @@ class SignalingServiceTest {
     private SignalingMetrics metrics;
 
     @Mock
+    private SessionRecordDispatcher recordDispatcher;
+
+    @Mock
     private WebSocketSession socket;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -73,9 +76,14 @@ class SignalingServiceTest {
     void setUp() {
         signalingService = new SignalingService(
                 redisTemplate, sessionManager, objectMapper,
-                sessionService, deviceSpecService, diagnosticLogger, relaySender, metrics);
+                sessionService, deviceSpecService, diagnosticLogger, relaySender, metrics, recordDispatcher);
         // 일부 경로(OCCUPIED 등)는 opsForValue를 쓰지 않으므로 lenient로 스텁
         lenient().when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        // 기록 디스패처는 단위 테스트에서 동기 실행으로 대체 — 기존 DB 호출 검증(verify)을 그대로 유지한다
+        lenient().doAnswer(inv -> {
+            inv.getArgument(2, Runnable.class).run();
+            return null;
+        }).when(recordDispatcher).dispatch(any(), any(), any(Runnable.class));
     }
 
     /** 두 슬롯이 모두 찬 세션을 주어진 상태로 Redis 모킹에 심는다. */

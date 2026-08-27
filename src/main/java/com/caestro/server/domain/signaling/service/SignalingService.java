@@ -35,6 +35,7 @@ public class SignalingService {
     private final SignalingDiagnosticLogger diagnosticLogger;
     private final SignalingRelaySender relaySender;
     private final SignalingMetrics metrics;
+    private final SessionRecordDispatcher recordDispatcher;
 
     private static final char[] CODE_ALPHABET =
             "0123456789ABCDEFGHJKMNPQRSTVWXYZ".toCharArray();
@@ -79,8 +80,9 @@ public class SignalingService {
         saveSessionInfo(sessionCode, info);
         redisTemplate.opsForValue().set("socket:" + socket.getId(), sessionCode, 10, TimeUnit.MINUTES);
 
-        // 4. DB에 세션 영구 저장 (Redis는 실시간 상태, DB는 영구 기록 용도)
-        sessionService.createSession(sessionCode, ownerUserId, expiresAt);
+        // 4. DB 영구 기록은 실시간 경로에서 분리 (#99) — Redis가 진실의 원천, WS 스레드는 기다리지 않는다
+        recordDispatcher.dispatch(sessionCode, "create",
+                () -> sessionService.createSession(sessionCode, ownerUserId, expiresAt));
 
         // 5. owner에게 세션 생성 완료 응답 전송 (참여자는 이 sessionCode로 입장)
         SignalingResponse response = SignalingResponse.builder()
@@ -155,8 +157,9 @@ public class SignalingService {
             redisTemplate.expire("socket:" + ownerSocketId, 10, TimeUnit.MINUTES);
         }
 
-        // 3. DB 세션 상태를 연결됨으로 동기화
-        sessionService.joinSession(sessionCode, userId, "APP");
+        // 3. DB 세션 상태 동기화는 실시간 경로에서 분리 (#99) — 같은 세션은 같은 워커라 create보다 늦게 실행됨이 보장된다
+        recordDispatcher.dispatch(sessionCode, "join",
+                () -> sessionService.joinSession(sessionCode, userId, "APP"));
 
         // 4. owner에게 참여자 입장 알림
         SignalingResponse notifyOwner = SignalingResponse.builder()
@@ -275,22 +278,13 @@ public class SignalingService {
      * @param msg    기기 스펙(줌 배율, 해상도 등)이 담긴 DEVICE_SPEC 메시지
      */
     public void handleDeviceSpec(WebSocketSession socket, SignalingRequest msg) {
-        // 1. 기기 스펙 DB 저장 (실패해도 relay를 막지 않도록 예외를 격리)
+        // 1. 기기 스펙 DB 기록은 실시간 경로에서 분리 (#99) — 실패는 디스패처가 격리해 relay를 막지 않는다.
         //    role은 클라이언트 주장을 믿지 않고, 인증된 userId를 키로 사용한다.
-        try {
-            Long userId = getUserId(socket);
-            deviceSpecService.saveDeviceSpec(
-                    normalizeSessionCode(msg.sessionCode()),
-                    userId,
-                    msg.maxZoom(),
-                    msg.minZoom(),
-                    msg.screenRatio(),
-                    msg.maxResolution(),
-                    msg.osType()
-            );
-        } catch (Exception e) {
-            log.error("Failed to save device spec: sessionCode={}", msg.sessionCode(), e);
-        }
+        Long userId = getUserId(socket);
+        String sessionCode = normalizeSessionCode(msg.sessionCode());
+        recordDispatcher.dispatch(sessionCode, "spec",
+                () -> deviceSpecService.saveDeviceSpec(sessionCode, userId, msg.maxZoom(), msg.minZoom(),
+                        msg.screenRatio(), msg.maxResolution(), msg.osType()));
 
         // 2. 기존 정책대로 상대 기기에 스펙 중계
         relay(socket, msg);
@@ -410,8 +404,8 @@ public class SignalingService {
             info.setStatus("ENDED");
             saveSessionInfo(sessionCode, info);
 
-            // 3. DB 세션도 종료 상태로 동기화
-            sessionService.endSession(sessionCode);
+            // 3. DB 종료 기록은 실시간 경로에서 분리 (#99)
+            recordDispatcher.dispatch(sessionCode, "end", () -> sessionService.endSession(sessionCode));
 
             // 4. 상대방에게 세션 종료 알림 전송
             String targetSocketId = socket.getId().equals(info.getOwnerSocketId())

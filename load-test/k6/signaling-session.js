@@ -43,6 +43,7 @@ const RECONNECT = __ENV.RECONNECT !== '0';           // 0이면 예기치 않은
 const PROBE_SEC = Number(__ENV.PROBE_SEC || 0);      // >0: 수립 후 양쪽이 N초마다 ICE 1건 전송 → 공백 중 유실(sent−received) 측정
 const RESUME_TIMEOUT_MS = Number(__ENV.RESUME_TIMEOUT_SEC || 15) * 1000; // 최초 close부터 복원까지 허용 시간
 const MAX_BACKOFF_MS = 30000;
+const MAX_IMMEDIATE_1012 = 2;                        // 연속 1012에 즉시 재시도하는 상한 — 넘으면 backoff (드레인 중 인스턴스에 재착지 시 루프 방지)
 
 // ═══ 커스텀 지표 ═══
 const relayIceE2e = new Trend('relay_ice_e2e_ms');       // ICE 편도 지연 (소형 페이로드)
@@ -136,6 +137,7 @@ function runSession(sessionLifeMs) {
     const sockets = { owner: null, participant: null }; // 역할별 "현재" 소켓 — 재접속하면 새 소켓으로 교체된다
     const pending = { owner: null, participant: null }; // 재접속 중이면 { closedAt } (SESSION_RESUMED 대기)
     const attempts = { owner: 0, participant: 0 };      // 연속 재접속 시도 횟수 (backoff 지수, 성공 시 0)
+    const immediate1012 = { owner: 0, participant: 0 }; // 연속 1012 즉시 재시도 횟수 (성공 시 0)
     const pingStarted = { owner: false, participant: false };
     const timeouts = [];
     const intervals = [];
@@ -245,7 +247,15 @@ function runSession(sessionLifeMs) {
             }, RESUME_TIMEOUT_MS));
         }
         const attempt = attempts[role]++;
-        const delay = code === 1012 ? 0 : Math.min(1000 * Math.pow(2, attempt) + Math.random() * 1000, MAX_BACKOFF_MS);
+        let delay;
+        if (code === 1012 && immediate1012[role] < MAX_IMMEDIATE_1012) {
+            // 1012(서버 재시작): 곧바로, 단 0~1s 흩뿌려서 (서버 jitter와 이중 분산).
+            // 1차 after 실측: 지연 0으로 재시도하다 드레인 중 인스턴스에 재착지하면 1.2초에 697회 루프가 생겼다
+            immediate1012[role]++;
+            delay = Math.random() * 1000;
+        } else {
+            delay = Math.min(1000 * Math.pow(2, attempt) + Math.random() * 1000, MAX_BACKOFF_MS);
+        }
         timeouts.push(setTimeout(() => {
             if (done) return;
             // 같은 토큰(=같은 userId)으로 JOIN_SESSION → 서버가 슬롯 takeover 후 SESSION_RESUMED
@@ -258,6 +268,7 @@ function runSession(sessionLifeMs) {
         if (!p) return;
         pending[role] = null;
         attempts[role] = 0;
+        immediate1012[role] = 0;
         resumeMs.add(Date.now() - p.closedAt);
         resumeOk.add(1);
         // 계약: P2P 미수립(ANSWER 미수신) 상태로 돌아오면 디렉터(owner)가 OFFER를 다시 보낸다
@@ -276,6 +287,7 @@ function runSession(sessionLifeMs) {
                 });
                 break;
             case 'PEER_JOINED':
+                if (established) break; // 재접속이 takeover가 아닌 신규 입장으로 처리된 경우(슬롯 해제) — 수립 흐름을 다시 타지 않는다
                 joinMs.add(Date.now() - t.join);
                 established = true;
                 // 실제 앱 순서: 스펙 교환 → 오퍼 → ICE, 이후 유휴 유지(PING) → 수명 종료

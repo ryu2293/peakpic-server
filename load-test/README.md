@@ -56,7 +56,7 @@ k6 run -e SCENARIO=ramp k6/signaling-session.js
 세션 흐름: 게스트 로그인(VU당 1회) → CREATE → JOIN → DEVICE_SPEC×2 → OFFER/ANSWER →
 ICE 버스트(양측) → PING 25s 유지 → END_SESSION.
 
-재연결 계약(k6가 앱 대신 수행): 1012(서버 재시작)는 즉시, 그 외 코드는
+재연결 계약(k6가 앱 대신 수행): 1012(서버 재시작)는 0~1s 안에 즉시(연속 2회까지), 그 외 코드는
 `min(1s·2^n + random(0~1s), 30s)` backoff 후 **같은 토큰**으로 `JOIN_SESSION` → 서버 takeover →
 `SESSION_RESUMED`. 복귀 시 ANSWER를 못 받은 상태면 디렉터(owner)가 OFFER를 재발신한다.
 
@@ -84,8 +84,9 @@ ICE 버스트(양측) → PING 25s 유지 → END_SESSION.
 # 로컬 — close 코드·재접속 동작 검증. 복원 시간엔 컨테이너 재기동(~20s)이 섞이므로 참고치.
 k6 run -e SCENARIO=fixed -e SESSIONS=20 -e DURATION=3m -e SESSION_SEC=150 -e PROBE_SEC=2 \
   -e RESUME_TIMEOUT_SEC=60 --summary-export=results/<날짜>/local-restart.json k6/signaling-session.js
-# (1분 뒤, 세션이 전부 수립된 상태에서)
-docker compose -f docker-compose.loadtest.yml restart app
+# (1분 뒤, 세션이 전부 수립된 상태에서) — stop 타임아웃을 넉넉히: compose restart는 ~1초 만에 SIGKILL을
+# 보내 드레인(jitter 3s)을 중간에 끊는 것이 실측됨 (#106 1차 after). 운영의 docker --stop-timeout 30과 같은 조건
+docker stop -t 30 lt-app && docker start lt-app
 
 # 운영 — 진짜 롤링 교체. 알람 비활성(위 절차) 후 실행, 3분 뒤 같은 이미지로 refresh 재실행
 k6 run -e SCENARIO=fixed -e SESSIONS=50 -e DURATION=12m -e SESSION_SEC=300 -e PROBE_SEC=2 \

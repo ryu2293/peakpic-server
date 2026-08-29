@@ -69,6 +69,7 @@ public class SignalingWebSocketHandler extends TextWebSocketHandler {
     @Override
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
         log.info("Client disconnected: {} (status: {})", session.getId(), status);
+        metrics.countClose(status.getCode()); // 종료 코드 분포 (#105): 1006=비정상, 1012=드레인 정돈 종료
         sessionManager.removeSession(session);
 
         signalingService.handleDisconnect(session);

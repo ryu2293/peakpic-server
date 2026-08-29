@@ -108,6 +108,11 @@ public class SignalingMetrics {
         registry.counter("ws.close", "code", label).increment();
     }
 
+    /** 드레인(#106)이 정돈 종료(1012)로 닫은 소켓 수. 배포 1회당 영향 세션 규모의 서버 측 기록. */
+    public void countDrainClosed(int closed) {
+        registry.counter("ws.drain.closed").increment(closed);
+    }
+
     public void countRelay(boolean local) {
         (local ? relayLocal : relayPubsub).increment();
     }

@@ -69,8 +69,8 @@ public class AuthService {
      * 모바일(네이티브 SDK) 소셜 로그인.
      * SDK가 발급받은 access token으로 프로필을 조회해 JWT를 발급한다. (Android·iOS 공통)
      *
-     * @param providerName OAuth provider 이름 (kakao, google)
-     * @param accessToken  소셜 플랫폼 access token (모바일 SDK 발급)
+     * @param providerName OAuth provider 이름 (kakao, google, apple)
+     * @param accessToken  소셜 플랫폼 토큰 (카카오=access token, 구글=ID token, 애플=identity token)
      * @return accessToken + refreshToken 쌍
      */
     public TokenResponse socialLoginByToken(String providerName, String accessToken) {

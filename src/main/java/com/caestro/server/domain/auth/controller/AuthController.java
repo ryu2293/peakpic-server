@@ -10,10 +10,14 @@ import com.caestro.server.domain.user.entity.User;
 import com.caestro.server.domain.user.repository.UserRepository;
 import com.caestro.server.global.exception.CustomException;
 import com.caestro.server.global.exception.error.ErrorCode;
+import com.caestro.server.global.ratelimit.RedisRateLimiter;
 import com.caestro.server.global.security.CustomUserDetails;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import java.time.Duration;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.validation.annotation.Validated;
@@ -33,10 +37,23 @@ public class AuthController implements AuthApi {
 
     private final AuthService authService;
     private final UserRepository userRepository;
+    private final RedisRateLimiter rateLimiter;
+
+    @Value("${auth.ratelimit.guest-limit:10}")
+    private int guestRateLimit;
+
+    @Value("${auth.ratelimit.guest-window-seconds:60}")
+    private int guestRateWindowSeconds;
 
     @PostMapping("/guest")
     @Override
-    public ResponseEntity<TokenResponse> guestLogin(@Valid @RequestBody GuestLoginRequest request) {
+    public ResponseEntity<TokenResponse> guestLogin(@Valid @RequestBody GuestLoginRequest request,
+            HttpServletRequest httpRequest) {
+        // 무인증 공개 + DB write 경로라 IP당 발급 속도를 제한한다 (#125, 스탬피드 실측 http p90 5.89s)
+        if (!rateLimiter.tryAcquire("rl:guest:" + clientIp(httpRequest),
+                guestRateLimit, Duration.ofSeconds(guestRateWindowSeconds))) {
+            throw new CustomException(ErrorCode.TOO_MANY_REQUESTS);
+        }
         return ResponseEntity.ok(authService.guestLogin(request.deviceId()));
     }
 
@@ -84,5 +101,13 @@ public class AuthController implements AuthApi {
         User user = userRepository.findById(userDetails.getUserId())
                 .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
         return ResponseEntity.ok(user);
+    }
+
+    /** ALB 뒤에서는 X-Forwarded-For의 첫 값이 실제 클라이언트 IP다 (직접 연결이면 remoteAddr). */
+    private static String clientIp(HttpServletRequest request) {
+        String forwarded = request.getHeader("X-Forwarded-For");
+        return (forwarded != null && !forwarded.isBlank())
+                ? forwarded.split(",")[0].trim()
+                : request.getRemoteAddr();
     }
 }

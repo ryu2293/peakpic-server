@@ -69,6 +69,9 @@ dependencies {
 
 	// resilience4j — 세션 기록 워커의 일시 오류 재시도 (#124). 프로그래매틱 사용이라 스타터/AOP 불필요
 	implementation "io.github.resilience4j:resilience4j-retry:2.2.0"
+	// resilience4j — 외부 API 서킷브레이커 + 상태 지표 Micrometer 노출 (#125)
+	implementation "io.github.resilience4j:resilience4j-circuitbreaker:2.2.0"
+	implementation "io.github.resilience4j:resilience4j-micrometer:2.2.0"
 }
 
 // /actuator/info 에 버전·빌드시각 노출 (META-INF/build-info.properties 생성)

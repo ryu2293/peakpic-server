@@ -103,6 +103,27 @@ aws autoscaling start-instance-refresh --auto-scaling-group-name peakpic-asg \
 → `resume_success`(다 돌아왔나) → `relay_msgs_sent−received`(공백 중 뭘 잃었나) → Grafana
 `ws_connections_active` 인스턴스별 절벽/복구 곡선.
 
+## 외부 인증 서버 장애 전염 실험 (#125)
+
+카카오가 침묵할 때 무관한 경로(게스트 로그인)로 전염되는 크기와, 타임아웃+서킷브레이커의
+차단 효과를 잰다. 가짜 침묵 서버(120s 슬립)에 user-info URI를 겨냥한다.
+
+```bash
+python3 fake-kakao.py                          # 터미널 A: :9999 침묵 서버
+# 터미널 B — before(타임아웃 60s 근사) ↔ after(기본 3s)는 EXTERNAL_... 유무만 다름
+KAKAO_USERINFOURI=http://host.docker.internal:9999/v2/user/me \
+EXTERNAL_HTTP_RESPONSETIMEOUTMS=60000 \
+AUTH_RATELIMIT_GUESTLIMIT=100000 \
+docker compose -f docker-compose.loadtest.yml up -d --build
+k6 run -e DURATION=3m k6/oauth-outage.js
+```
+
+읽는 법: 방관자(`bystander_guest_ms`)는 **avg·max**로 본다 — 구간 장애는 전체 분위수(p95)에
+가려진다. `attack_503_circuit_open`이 서킷의 흡수량. 실측(2026-09-03, results/2026-09-03-125-outage/):
+인질 회수가 60s→3s로 줄며 방관자 avg 26×(1s→38.5ms)·max 42×(58.2s→1.37s) 개선,
+서킷은 초당 ~920건을 med 5ms에 거절. 교훈: 서킷은 새 호출만 막고, 이미 스레드를 쥔 호출은
+타임아웃만이 회수한다 — 둘은 세트다.
+
 ## 스모크에서 이미 확인된 사실 (2026-08-24, 무부하 로컬 dev)
 
 - 중계 48건에 **PEXPIRE 정확히 146회** = 48×3 + JOIN TTL 연장 2회 → "relay 1건 = Redis 순차

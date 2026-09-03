@@ -21,25 +21,28 @@ public class KakaoOAuthProvider implements OAuthProvider {
 
     private static final String PROVIDER_NAME = "kakao";
     private static final String TOKEN_URI = "https://kauth.kakao.com/oauth/token";
-    private static final String USER_INFO_URI = "https://kapi.kakao.com/v2/user/me";
 
     private final WebClient webClient;
     private final ExternalApiGuard externalApiGuard;
     private final String clientId;
     private final String clientSecret;
     private final String redirectUri;
+    // 주입 가능(기본값 = 실제 카카오): 장애 주입 실험(#125)에서 가짜 카카오로 바꿔치기하는 시금.
+    private final String userInfoUri;
 
     public KakaoOAuthProvider(
             WebClient.Builder webClientBuilder,
             ExternalApiGuard externalApiGuard,
             @Value("${kakao.client-id}") String clientId,
             @Value("${kakao.client-secret}") String clientSecret,
-            @Value("${kakao.redirect-uri}") String redirectUri) {
+            @Value("${kakao.redirect-uri}") String redirectUri,
+            @Value("${kakao.user-info-uri:https://kapi.kakao.com/v2/user/me}") String userInfoUri) {
         this.webClient = webClientBuilder.build();
         this.externalApiGuard = externalApiGuard;
         this.clientId = clientId;
         this.clientSecret = clientSecret;
         this.redirectUri = redirectUri;
+        this.userInfoUri = userInfoUri;
     }
 
     @Override
@@ -94,7 +97,7 @@ public class KakaoOAuthProvider implements OAuthProvider {
         try {
             // 사용자 정보 조회는 멱등(GET) — 서킷브레이커 + 인프라 장애 1회 재시도 (#125)
             return externalApiGuard.idempotent(PROVIDER_NAME, () -> webClient.get()
-                    .uri(USER_INFO_URI)
+                    .uri(userInfoUri)
                     .headers(headers -> headers.setBearerAuth(accessToken))
                     .retrieve()
                     .bodyToMono(KakaoUserResponse.class)

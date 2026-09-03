@@ -189,6 +189,22 @@ class SignalingServiceTest {
         verify(valueOperations, never()).set(any(), any(), anyLong(), any());
     }
 
+    @Test
+    @DisplayName("JOIN: 종료된 세션(ENDED)이면 부활 없이 에러만 보낸다 — 묘비 가드 (#124)")
+    void joinSession_endedSession_rejectedWithoutResurrection() {
+        given(socket.getId()).willReturn("revive-sock");
+        given(socket.getAttributes()).willReturn(java.util.Map.of("userId", 2L));
+        given(redisTemplate.execute(org.mockito.ArgumentMatchers.<org.springframework.data.redis.core.script.RedisScript<String>>any(),
+                org.mockito.ArgumentMatchers.anyList(), any(), any(), any())).willReturn("ENDED");
+
+        signalingService.joinSession(socket, joinRequest(SESSION_CODE));
+
+        verify(sessionManager).sendMessage(eq("revive-sock"), any());          // SESSION_NOT_FOUND 에러 응답
+        verify(metrics).countJoin("ended");                                    // 부활 시도가 지표로 관측된다
+        verify(valueOperations, never()).set(any(), any(), anyLong(), any()); // 매핑 등록 없음 = 부활 없음
+        verify(relaySender, never()).send(any(), any());                       // PEER_RECONNECTED 없음
+    }
+
     private com.caestro.server.domain.signaling.dto.request.SignalingRequest joinRequest(String code) {
         return new com.caestro.server.domain.signaling.dto.request.SignalingRequest(
                 "JOIN_SESSION", code, null, null, null, null, null, null,

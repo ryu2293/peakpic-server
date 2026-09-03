@@ -123,6 +123,8 @@ public class SignalingService {
         metrics.countJoin(result == null ? "invalid" : result.toLowerCase());
         switch (result == null ? "" : result) {
             case "NOT_FOUND" -> sendError(socket, sessionCode, ErrorCode.SESSION_NOT_FOUND);
+            // 종료된 세션 재입장 — 클라 입장에선 소멸한 세션과 동일하므로 같은 에러 (계약 변경 없음, #124)
+            case "ENDED" -> sendError(socket, sessionCode, ErrorCode.SESSION_NOT_FOUND);
             case "OCCUPIED" -> sendError(socket, sessionCode, ErrorCode.SESSION_ALREADY_CONNECTED);
             case "TAKEOVER_OWNER", "TAKEOVER_PARTICIPANT" -> {
                 // 재연결(takeover): 본인 슬롯이면 소켓만 교체하고 복귀 처리

@@ -167,7 +167,8 @@ class SignalingServiceTest {
 
         verify(valueOperations).set(eq("socket:p-sock"), eq(SESSION_CODE), anyLong(), any(TimeUnit.class));
         verify(redisTemplate).expire(eq("socket:" + OWNER_SOCKET), anyLong(), any(TimeUnit.class));
-        verify(sessionService).joinSession(SESSION_CODE, 2L, "APP");
+        // 기록 태스크에 스냅샷(ownerUserId, expiresAt)이 동봉된다 (#124 — 순서 무관 upsert 재료)
+        verify(sessionService).joinSession(SESSION_CODE, 2L, "APP", 1L, null);
         verify(relaySender).send(eq(OWNER_SOCKET), any());
         verify(metrics).countJoin("claimed");
     }
@@ -184,8 +185,24 @@ class SignalingServiceTest {
 
         verify(sessionManager).sendMessage(eq("late-sock"), any()); // ERROR 응답
         verify(metrics).countJoin("occupied");
-        verify(sessionService, never()).joinSession(any(), any(), any());
+        verify(sessionService, never()).joinSession(any(), any(), any(), any(), any());
         verify(valueOperations, never()).set(any(), any(), anyLong(), any());
+    }
+
+    @Test
+    @DisplayName("JOIN: 종료된 세션(ENDED)이면 부활 없이 에러만 보낸다 — 묘비 가드 (#124)")
+    void joinSession_endedSession_rejectedWithoutResurrection() {
+        given(socket.getId()).willReturn("revive-sock");
+        given(socket.getAttributes()).willReturn(java.util.Map.of("userId", 2L));
+        given(redisTemplate.execute(org.mockito.ArgumentMatchers.<org.springframework.data.redis.core.script.RedisScript<String>>any(),
+                org.mockito.ArgumentMatchers.anyList(), any(), any(), any())).willReturn("ENDED");
+
+        signalingService.joinSession(socket, joinRequest(SESSION_CODE));
+
+        verify(sessionManager).sendMessage(eq("revive-sock"), any());          // SESSION_NOT_FOUND 에러 응답
+        verify(metrics).countJoin("ended");                                    // 부활 시도가 지표로 관측된다
+        verify(valueOperations, never()).set(any(), any(), anyLong(), any()); // 매핑 등록 없음 = 부활 없음
+        verify(relaySender, never()).send(any(), any());                       // PEER_RECONNECTED 없음
     }
 
     private com.caestro.server.domain.signaling.dto.request.SignalingRequest joinRequest(String code) {

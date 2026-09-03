@@ -157,9 +157,12 @@ public class SignalingService {
             redisTemplate.expire("socket:" + ownerSocketId, 10, TimeUnit.MINUTES);
         }
 
-        // 3. DB 세션 상태 동기화는 실시간 경로에서 분리 (#99) — 같은 세션은 같은 워커라 create보다 늦게 실행됨이 보장된다
+        // 3. DB 기록은 실시간 경로에서 분리 (#99). 도착 순서는 멱등 upsert가 흡수하므로(#124) 보장하지 않되,
+        //    create 기록보다 먼저 도착해도 스스로 행을 만들 수 있게 이 시점의 스냅샷을 동봉한다
+        Long snapshotOwnerId = info != null ? info.getOwnerUserId() : null;
+        LocalDateTime snapshotExpiresAt = info != null ? info.getExpiresAt() : null;
         recordDispatcher.dispatch(sessionCode, "join",
-                () -> sessionService.joinSession(sessionCode, userId, "APP"));
+                () -> sessionService.joinSession(sessionCode, userId, "APP", snapshotOwnerId, snapshotExpiresAt));
 
         // 4. owner에게 참여자 입장 알림
         SignalingResponse notifyOwner = SignalingResponse.builder()
@@ -424,8 +427,9 @@ public class SignalingService {
             info.setStatus("ENDED");
             saveSessionInfo(sessionCode, info);
 
-            // 3. DB 종료 기록은 실시간 경로에서 분리 (#99)
-            recordDispatcher.dispatch(sessionCode, "end", () -> sessionService.endSession(sessionCode));
+            // 3. DB 종료 기록은 실시간 경로에서 분리 (#99) — 순서 무관 처리를 위해 스냅샷 동봉 (#124)
+            recordDispatcher.dispatch(sessionCode, "end",
+                    () -> sessionService.endSession(sessionCode, info.getOwnerUserId(), info.getExpiresAt()));
 
             // 4. 상대방에게 세션 종료 알림 전송
             String targetSocketId = socket.getId().equals(info.getOwnerSocketId())

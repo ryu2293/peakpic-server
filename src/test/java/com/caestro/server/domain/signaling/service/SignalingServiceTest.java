@@ -167,7 +167,8 @@ class SignalingServiceTest {
 
         verify(valueOperations).set(eq("socket:p-sock"), eq(SESSION_CODE), anyLong(), any(TimeUnit.class));
         verify(redisTemplate).expire(eq("socket:" + OWNER_SOCKET), anyLong(), any(TimeUnit.class));
-        verify(sessionService).joinSession(SESSION_CODE, 2L, "APP");
+        // 기록 태스크에 스냅샷(ownerUserId, expiresAt)이 동봉된다 (#124 — 순서 무관 upsert 재료)
+        verify(sessionService).joinSession(SESSION_CODE, 2L, "APP", 1L, null);
         verify(relaySender).send(eq(OWNER_SOCKET), any());
         verify(metrics).countJoin("claimed");
     }
@@ -184,7 +185,7 @@ class SignalingServiceTest {
 
         verify(sessionManager).sendMessage(eq("late-sock"), any()); // ERROR 응답
         verify(metrics).countJoin("occupied");
-        verify(sessionService, never()).joinSession(any(), any(), any());
+        verify(sessionService, never()).joinSession(any(), any(), any(), any(), any());
         verify(valueOperations, never()).set(any(), any(), anyLong(), any());
     }
 

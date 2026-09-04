@@ -12,6 +12,7 @@ import com.caestro.server.global.exception.CustomException;
 import com.caestro.server.global.exception.error.ErrorCode;
 import com.caestro.server.global.ratelimit.RedisRateLimiter;
 import com.caestro.server.global.security.CustomUserDetails;
+import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.time.Duration;
@@ -38,8 +39,11 @@ public class AuthController implements AuthApi {
     private final AuthService authService;
     private final UserRepository userRepository;
     private final RedisRateLimiter rateLimiter;
+    private final MeterRegistry meterRegistry;
 
-    @Value("${auth.ratelimit.guest-limit:10}")
+    // 기본 30/분 (#129): CGNAT 등 공유 IP의 정상 트래픽(분당 수~수십)은 통과시키고
+    // 공격(실측 초당 수백 = 분당 수만)만 자르는 눈금 — 오탐 여부는 아래 429 지표로 관측해 조정한다
+    @Value("${auth.ratelimit.guest-limit:30}")
     private int guestRateLimit;
 
     @Value("${auth.ratelimit.guest-window-seconds:60}")
@@ -52,6 +56,8 @@ public class AuthController implements AuthApi {
         // 무인증 공개 + DB write 경로라 IP당 발급 속도를 제한한다 (#125, 스탬피드 실측 http p90 5.89s)
         if (!rateLimiter.tryAcquire("rl:guest:" + clientIp(httpRequest),
                 guestRateLimit, Duration.ofSeconds(guestRateWindowSeconds))) {
+            // 정상 시간대에 이 카운터가 찍히면 공유 IP 오탐 신호 → 한도(추정치 30)를 실측으로 교정 (#129)
+            meterRegistry.counter("auth.guest.rate_limited").increment();
             throw new CustomException(ErrorCode.TOO_MANY_REQUESTS);
         }
         return ResponseEntity.ok(authService.guestLogin(request.deviceId()));

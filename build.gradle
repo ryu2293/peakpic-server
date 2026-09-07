@@ -72,6 +72,9 @@ dependencies {
 	// resilience4j — 외부 API 서킷브레이커 + 상태 지표 Micrometer 노출 (#125)
 	implementation "io.github.resilience4j:resilience4j-circuitbreaker:2.2.0"
 	implementation "io.github.resilience4j:resilience4j-micrometer:2.2.0"
+
+	// 구조화(JSON) 로그 인코더 — prod 프로파일 전용, CloudWatch Logs Insights 필드 질의용 (#131)
+	implementation "net.logstash.logback:logstash-logback-encoder:8.1"
 }
 
 // /actuator/info 에 버전·빌드시각 노출 (META-INF/build-info.properties 생성)

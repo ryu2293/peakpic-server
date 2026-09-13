@@ -16,7 +16,9 @@
 **두 기기를 연결해 주고 그 연결을 살아있게 유지**하는 일을 합니다 — 시그널링, 세션 상태, 인증,
 TURN, 그리고 배포·장애·네트워크 전환에서의 연결 보호.
 
-![PeakPic AWS 아키텍처](docs/architecture.png)
+![PeakPic AWS 아키텍처]
+<img width="2400" height="1788" alt="architecture" src="https://github.com/user-attachments/assets/a2934d1c-663a-4107-bf33-fa6e2f871a4c" />
+
 
 > 미디어(영상) 트래픽은 앱 ↔ 앱 P2P로 직결되어 우리 인프라를 경유하지 않습니다.
 > P2P 연결에 실패할 때만 TURN(coturn) relay를 거칩니다.
@@ -51,12 +53,14 @@ WebSocket 연결은 세 가지 방식으로 끊깁니다 — **우리가 배포�
 EC2 메타데이터(IMDS)의 수명주기 상태를 2초 주기로 폴링해 "종료가 결정된 순간" 드레인하도록
 재설계했습니다.
 
-![WS 종료 코드 — 1012만 기록, 1006 제로](docs/close-codes-1012.png)
+![WS 종료 코드 — 1012만 기록, 1006 제로](<img width="1880" height="841" alt="close-codes-1012" src="https://github.com/user-attachments/assets/e8100c07-aaab-4bc2-b1cd-cc35598ba8c1" />
+)
 
 > 배포를 관통한 측정의 종료 코드 분포. 1012(정돈된 종료)만 기록되고
 > 1006(비정상 절단)·1000·1001은 전 구간 0입니다.
 
-![활성 연결 드레인 계단](docs/drain-staircase.png)
+![활성 연결 드레인 계단](<img width="1880" height="841" alt="drain-staircase" src="https://github.com/user-attachments/assets/64d97d42-0a98-4517-9511-bb94bd43055d" />
+)
 
 > 인스턴스별 활성 연결. 드레인된 인스턴스의 연결이 0으로 떨어지는 동시에
 > 다른 인스턴스가 그만큼 받아 총합이 유지됩니다.
@@ -81,7 +85,8 @@ terminate-first라 배포 중 실질 1대 서빙 구간이 생기고 있었습�
 1008(정책 위반)은 재접속 금지. 재접속은 **같은 토큰**으로 JOIN해 서버가 자리를 인계하고,
 공백 동안 놓친 상태는 replay 대신 `SESSION_RESUMED` 스냅샷으로 복원합니다.
 
-![JOIN takeover 집계](docs/join-takeover.png)
+![JOIN takeover 집계](<img width="1880" height="391" alt="join-takeover" src="https://github.com/user-attachments/assets/1ba66064-318a-4695-a891-f59b8814871e" />
+)
 
 > 재접속이 신규 입장이 아니라 takeover로 처리된 것을 인스턴스별로 확인한 지표.
 
@@ -94,13 +99,12 @@ PING을 서버가 아니라 클라이언트가 보내게 한 것은 이식성 �
 
 실제로 동작하는 것을 측정 중에 확인했습니다.
 
-![유령 소켓 42개와 리퍼](docs/reaper-ghost-sockets.png)
+![유령 소켓 42개와 리퍼](<img width="3764" height="1676" alt="reaper-ghost-sockets" src="https://github.com/user-attachments/assets/189f7284-06cb-4af0-ba03-e89f5138f049" />
+)
 
 > 측정 노트북의 Wi-Fi가 순단되며 42개 소켓이 코드 없이 끊겼을 때, 서버의 활성 연결 합계가
 > 100에서 142로 부풀었습니다(죽은 소켓이 유령으로 잔류). 90초 뒤 리퍼가 정리하며 100으로
 > 수축했고, 42건 전부 backoff 재접속으로 복원되어 세션 손실은 0이었습니다.
-
-📖 [상세: 롤링 배포는 연결을 옮겨주지 않는다 — 1006×150에서 1012×150까지](https://velog.io/@ryu2293/posts)
 
 ---
 
@@ -112,7 +116,8 @@ SDP/ICE 교환 → 유지)을 재현하는 k6 시나리오를 설계하고, 페�
 
 동시 500세션 **유지**는 여유였지만, 동시 **몰림**에서는 달랐습니다.
 
-![스파이크 구간 처리시간](docs/spike-p95.png)
+![스파이크 구간 처리시간](<img width="1473" height="702" alt="spike-p95" src="https://github.com/user-attachments/assets/be21bde4-ff75-4c2f-8e6d-aff7ca7205d9" />
+)
 
 > 동기화된 파도 구간에서만 P95가 솟고, 시작 시점을 흩뿌리면 평탄해집니다.
 > 한계를 좌우한 건 "동시 세션 수"가 아니라 "동시 수립 수"였습니다.
@@ -123,7 +128,8 @@ SDP/ICE 교환 → 유지)을 재현하는 k6 시나리오를 설계하고, 페�
   (실측: 중계 48건에 PEXPIRE 146회 → 2회, EVALSHA 48회로 1:1 대응)
 - **세션 수립 경로의 DB 동기 기록** → 비동기 큐로 분리
 
-![커넥션 풀 대기 62 → 0](docs/hikari-pending.png)
+![커넥션 풀 대기 62 → 0](<img width="2732" height="621" alt="hikari-pending" src="https://github.com/user-attachments/assets/abef8090-feec-496f-a97b-9f27d344a624" />
+)
 
 > 세션 수립 경로의 DB 동기 기록이 병목이었습니다. 커넥션 대기가 최대 62까지 쌓였고,
 > 비동기 분리 후 전 구간 0이 됐습니다.
@@ -138,8 +144,6 @@ SDP/ICE 교환 → 유지)을 재현하는 k6 시나리오를 설계하고, 페�
 평상 부하는 회귀 없이 유지(4ms → 3ms)됐고, 운영 검증에서 670세션 · 중계 유실 0(16,080/16,080)을
 확인했습니다.
 
-📖 [상세: 동시 500세션은 여유였는데, 100명이 한꺼번에 들어오자 부하가 걸렸다](https://velog.io/@ryu2293/posts)
-
 ---
 
 ## 3. 서버가 2대가 되는 순간
@@ -148,12 +152,14 @@ SDP/ICE 교환 → 유지)을 재현하는 k6 시나리오를 설계하고, 페�
 **"연결은 로컬에, 이벤트는 공유로"** — Redis Pub/Sub으로 전 인스턴스에 발행하고 소켓을 쥔
 인스턴스만 전송하되, 같은 인스턴스에 있으면 Pub/Sub을 거치지 않는 로컬 우선 경로를 뒀습니다.
 
-![크로스 인스턴스 중계 비율](docs/cross-instance.png)
+![크로스 인스턴스 중계 비율](<img width="1471" height="730" alt="cross-instance" src="https://github.com/user-attachments/assets/ed32d972-5fdc-4578-8299-178342ff39ec" />
+)
 
 > 운영에서 실제로 중계의 60~72%가 인스턴스를 건너가고 있습니다 — Pub/Sub이 장식이 아니라
 > 상시 동작하는 경로임을 보여줍니다.
 
-![2대 연결 분산](docs/two-instance-split.png)
+![2대 연결 분산](<img width="1471" height="730" alt="two-instance-split" src="https://github.com/user-attachments/assets/fae068a1-2432-4689-932f-699beba8aa10" />
+)
 
 > 두 인스턴스에 연결이 분산된 상태에서도 Pub/Sub 유실은 0입니다.
 
@@ -166,8 +172,6 @@ SDP/ICE 교환 → 유지)을 재현하는 k6 시나리오를 설계하고, 페�
 
 경합은 고치기 전에 테스트로 재현해 "naive read-modify-write는 동시 JOIN을 둘 다 성공시킨다"를
 결함의 문서로 남겨뒀습니다.
-
-📖 [상세: 서버가 2대가 되는 순간 WebSocket이 깨진다](https://velog.io/@ryu2293/posts)
 
 ---
 
@@ -231,8 +235,6 @@ alpine 런타임 채택도 한 번 고민했습니다. musl libc 호환 문제�
 이미지 처리를 하지 않고(AI 팀이 생성해 S3/CloudFront로 서빙) 문제가 생겨도 base 이미지 한 줄
 변경으로 되돌릴 수 있어 채택했습니다. **트레이드오프는 일반론이 아니라 "우리 구조에서 그 리스크가
 실제로 발생하는가, 발생해도 되돌릴 수 있는가"로 판단**했습니다.
-
-📖 [상세: Docker 기초부터 배포 파이프라인 재구축까지](https://velog.io/@ryu2293/posts)
 
 ---
 

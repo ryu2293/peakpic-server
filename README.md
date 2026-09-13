@@ -60,8 +60,8 @@ EC2 메타데이터(IMDS)의 수명주기 상태를 2초 주기로 폴링해 "�
 > 배포를 관통한 측정의 종료 코드 분포. 1012(정돈된 종료)만 기록되고
 > 1006(비정상 절단)·1000·1001은 전 구간 0입니다.
 
-![활성 연결 드레인 계단](<img width="1880" height="841" alt="drain-staircase" src="https://github.com/user-attachments/assets/64d97d42-0a98-4517-9511-bb94bd43055d" />
-)
+[활성 연결 드레인 계단]
+<img width="1880" height="841" alt="drain-staircase" src="https://github.com/user-attachments/assets/64d97d42-0a98-4517-9511-bb94bd43055d" />
 
 > 인스턴스별 활성 연결. 드레인된 인스턴스의 연결이 0으로 떨어지는 동시에
 > 다른 인스턴스가 그만큼 받아 총합이 유지됩니다.
@@ -86,8 +86,9 @@ terminate-first라 배포 중 실질 1대 서빙 구간이 생기고 있었습�
 1008(정책 위반)은 재접속 금지. 재접속은 **같은 토큰**으로 JOIN해 서버가 자리를 인계하고,
 공백 동안 놓친 상태는 replay 대신 `SESSION_RESUMED` 스냅샷으로 복원합니다.
 
-![JOIN takeover 집계](<img width="1880" height="391" alt="join-takeover" src="https://github.com/user-attachments/assets/1ba66064-318a-4695-a891-f59b8814871e" />
-)
+[JOIN takeover 집계]
+<img width="1880" height="391" alt="join-takeover" src="https://github.com/user-attachments/assets/1ba66064-318a-4695-a891-f59b8814871e" />
+
 
 > 재접속이 신규 입장이 아니라 takeover로 처리된 것을 인스턴스별로 확인한 지표.
 
@@ -100,8 +101,9 @@ PING을 서버가 아니라 클라이언트가 보내게 한 것은 이식성 �
 
 실제로 동작하는 것을 측정 중에 확인했습니다.
 
-![유령 소켓 42개와 리퍼](<img width="3764" height="1676" alt="reaper-ghost-sockets" src="https://github.com/user-attachments/assets/189f7284-06cb-4af0-ba03-e89f5138f049" />
-)
+[유령 소켓 42개와 리퍼]
+<img width="3764" height="1676" alt="reaper-ghost-sockets" src="https://github.com/user-attachments/assets/189f7284-06cb-4af0-ba03-e89f5138f049" />
+
 
 > 측정 노트북의 Wi-Fi가 순단되며 42개 소켓이 코드 없이 끊겼을 때, 서버의 활성 연결 합계가
 > 100에서 142로 부풀었습니다(죽은 소켓이 유령으로 잔류). 90초 뒤 리퍼가 정리하며 100으로

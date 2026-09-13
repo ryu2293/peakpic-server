@@ -19,7 +19,8 @@
 **두 기기를 연결해 주고 그 연결을 살아있게 유지**하는 일을 합니다 — 시그널링, 세션 상태, 인증,
 TURN, 그리고 배포·장애·네트워크 전환에서의 연결 보호.
 
-![PeakPic AWS 아키텍처](img/architecture.png)<img width="2400" height="1788" alt="Gemini_Generated_Image_ac0l2jac0l2jac0l" src="https://github.com/user-attachments/assets/eab5e96f-861e-4e51-be65-6fa2f2d329cd" />
+![PeakPic AWS 아키텍처](img/architecture.png)<img width="2400" height="1788" alt="Peakpic-아키첵터" src="https://github.com/user-attachments/assets/57e7e34b-5848-45bb-b815-97f96d768ea0" />
+
 
 
 > 미디어(영상) 트래픽은 앱 ↔ 앱 P2P로 직결되어 우리 인프라를 경유하지 않습니다.

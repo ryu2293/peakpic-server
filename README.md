@@ -21,7 +21,7 @@ TURN, 그리고 배포·장애·네트워크 전환에서의 연결 보호.
 
 | | |
 |---|---|
-| 규모 | t3.micro 2대 · 동시 500세션 처리 검증 |
+| 규모 | t3.micro 2대 · 동시 1000세션 처리 검증 |
 | 중계 성능 | ICE 중계 p95 **21ms** · 중계 유실 **0** (16,080/16,080) |
 | 배포 안정성 | 롤링 배포 관통 측정 세션 복원 **150/150** · 세션 사망 **0** |
 | 스택 | Java 21 · Spring Boot · WebSocket · Redis · MySQL · AWS(ASG/ALB/Lambda/ECR) · coturn · Docker · k6 · Prometheus/Grafana |

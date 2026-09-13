@@ -3,8 +3,6 @@
 > 두 스마트폰을 WebRTC P2P로 연결해, 찍히는 사람이 촬영자의 화면을 보며 직접 구도를 지휘하는
 > 협업 촬영 앱. **Google Play 출시·운영 중** (AI·SW마에스트로 17기, 팀 4인)
 >
-> 이 저장소는 제가 담당한 **백엔드·인프라 작업**을 정리한 문서입니다. 팀 개발 저장소는 비공개이며,
-> 여기에는 설계 근거와 운영 측정 결과를 담았습니다.
 
 📱 [Google Play](https://play.google.com/store/apps/details?id=soma.project.caestro&hl=ko) · ✍️ [기술 블로그](https://velog.io/@ryu2293/posts)
 

@@ -1,6 +1,7 @@
 # PeakPic — 백엔드 · 인프라
 > 두 스마트폰을 WebRTC P2P로 연결해, 찍히는 사람이 촬영자의 화면을 보며 직접 구도를 지휘하는
 > 협업 촬영 앱. **Google Play 출시·운영 중** (AI·SW마에스트로 17기, 팀 4인)
+<br>
 사진을 부탁하면 구도가 마음에 안 드는 문제를, 두 스마트폰을 WebRTC P2P로
 연결해 **찍히는 사람이 촬영자의 화면을 보며 직접 구도를 지휘**하는 방식으로 풀었습니다.
 <img width="757" height="414" alt="스크린샷 2026-09-13 오후 4 19 15" src="https://github.com/user-attachments/assets/c6999f7a-fbbf-4c7f-9a8c-609c709a266f" />

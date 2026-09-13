@@ -1,4 +1,4 @@
-<img width="2400" height="1788" alt="peakpic_AWS_ Architecture_v4" src="https://github.com/user-attachments/assets/b5574eeb-7296-4f0a-b432-2c60739a2778" /># PeakPic — 백엔드 · 인프라
+# PeakPic — 백엔드 · 인프라
 
 > 두 스마트폰을 WebRTC P2P로 연결해, 찍히는 사람이 촬영자의 화면을 보며 직접 구도를
 > 지휘하는 협업 촬영 앱. **Google Play 출시·운영 중** (SW마에스트로 17기, 팀 4인)

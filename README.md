@@ -16,7 +16,7 @@
 **두 기기를 연결해 주고 그 연결을 살아있게 유지**하는 일을 합니다 — 시그널링, 세션 상태, 인증,
 TURN, 그리고 배포·장애·네트워크 전환에서의 연결 보호.
 
-![PeakPic AWS 아키텍처]
+[PeakPic AWS 아키텍처]
 <img width="2400" height="1788" alt="architecture" src="https://github.com/user-attachments/assets/a2934d1c-663a-4107-bf33-fa6e2f871a4c" />
 
 
@@ -53,8 +53,9 @@ WebSocket 연결은 세 가지 방식으로 끊깁니다 — **우리가 배포�
 EC2 메타데이터(IMDS)의 수명주기 상태를 2초 주기로 폴링해 "종료가 결정된 순간" 드레인하도록
 재설계했습니다.
 
-![WS 종료 코드 — 1012만 기록, 1006 제로](<img width="1880" height="841" alt="close-codes-1012" src="https://github.com/user-attachments/assets/e8100c07-aaab-4bc2-b1cd-cc35598ba8c1" />
-)
+[WS 종료 코드 — 1012만 기록, 1006 제로]
+<img width="1880" height="841" alt="close-codes-1012" src="https://github.com/user-attachments/assets/e8100c07-aaab-4bc2-b1cd-cc35598ba8c1" />
+
 
 > 배포를 관통한 측정의 종료 코드 분포. 1012(정돈된 종료)만 기록되고
 > 1006(비정상 절단)·1000·1001은 전 구간 0입니다.

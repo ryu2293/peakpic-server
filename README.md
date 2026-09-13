@@ -19,7 +19,8 @@
 **두 기기를 연결해 주고 그 연결을 살아있게 유지**하는 일을 합니다 — 시그널링, 세션 상태, 인증,
 TURN, 그리고 배포·장애·네트워크 전환에서의 연결 보호.
 
-<img width="2400" height="1788" alt="Peakpic-아키첵터" src="https://github.com/user-attachments/assets/57e7e34b-5848-45bb-b815-97f96d768ea0" />
+<img width="2400" height="1788" alt="Gemini_Generated_Image_1uyxd61uyxd61uyx" src="https://github.com/user-attachments/assets/c0173ecd-d528-4845-9912-f4aa8b6f3d57" />
+
 
 
 

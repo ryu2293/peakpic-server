@@ -9,7 +9,7 @@
 
 
 
-📱 [Google Play](https://play.google.com/store/apps/details?id=soma.project.caestro&hl=ko)·📱[App Store](https://apps.apple.com/kr/app/peakpic/id6807646621)· ✍️ [기술 블로그](https://velog.io/@ryu2293/posts)
+📱 [Google Play](https://play.google.com/store/apps/details?id=soma.project.caestro&hl=ko)·[App Store](https://apps.apple.com/kr/app/peakpic/id6807646621)· ✍️ [기술 블로그](https://velog.io/@ryu2293/posts)
 
 ---
 

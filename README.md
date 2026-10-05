@@ -19,7 +19,8 @@
 **두 기기를 연결해 주고 그 연결을 살아있게 유지**하는 일을 합니다 — 시그널링, 세션 상태, 인증,
 TURN, 그리고 배포·장애·네트워크 전환에서의 연결 보호.
 
-<img width="2400" height="1788" alt="Gemini_Generated_Image_1uyxd61uyxd61uyx" src="https://github.com/user-attachments/assets/c0173ecd-d528-4845-9912-f4aa8b6f3d57" />
+<img width="840" height="635" alt="peakpic_AWS" src="https://github.com/user-attachments/assets/896facb7-f862-4e78-b1a7-7673d8edeb2a" />
+
 
 
 
